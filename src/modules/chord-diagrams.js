@@ -81,7 +81,7 @@ function renderCatButtons(){
 
 function showChord(imgFile){
   const viewer = document.getElementById('cd-viewer');
-  viewer.innerHTML = `<div style="display:flex;justify-content:center"><img src="/chords/${imgFile}" alt="Chord diagram" style="width:100%;max-width:800px;border-radius:12px;box-shadow:4px 4px 12px rgba(0,0,0,0.08)"></div>`;
+  viewer.innerHTML = `<div style="display:flex;justify-content:center"><img src="${import.meta.env.BASE_URL}chords/${imgFile}" alt="Chord diagram" style="width:100%;max-width:800px;border-radius:12px;box-shadow:4px 4px 12px rgba(0,0,0,0.08)"></div>`;
 }
 
 export function initChordDiagrams() {
