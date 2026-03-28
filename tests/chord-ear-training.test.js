@@ -1,11 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  EAR_TRAINING_PRESETS,
   buildChordNotes,
+  buildChordPool,
+  buildPlaybackEvents,
   createQuestion,
   formatRootLabel,
   getChordDefinition,
+  TRAINING_TEMPLATES,
 } from '../src/core/chord-ear-training.js';
 
 test('formatRootLabel uses jazz-friendly accidental symbols', () => {
@@ -14,25 +16,38 @@ test('formatRootLabel uses jazz-friendly accidental symbols', () => {
   assert.equal(formatRootLabel('C'), 'C');
 });
 
-test('buildChordNotes returns expected voicing for B-flat minor 9', () => {
-  const chord = buildChordNotes('Bb', 'm9', 3);
+test('buildChordPool combines selected base chords and extensions', () => {
+  const pool = buildChordPool({
+    baseChordIds: ['major', 'minor'],
+    extensionIds: ['base', '9', '13'],
+  });
 
-  assert.equal(chord.label, 'B♭m9');
-  assert.deepEqual(chord.noteLabels, ['B♭', 'D♭', 'F', 'A♭', 'C']);
-  assert.deepEqual(chord.audioNotes, ['Bb3', 'Db4', 'F4', 'Ab4', 'C5']);
+  assert.deepEqual(pool, ['maj7', 'maj9', 'maj13', 'm7', 'm9', 'm13']);
 });
 
-test('minor 11 feedback highlights its tension color', () => {
-  const chord = buildChordNotes('D', 'm11', 3);
+test('buildChordPool filters unsupported combinations and keeps base chords', () => {
+  const pool = buildChordPool({
+    baseChordIds: ['major', 'half-diminished', 'diminished'],
+    extensionIds: ['base', '11'],
+  });
 
-  assert.equal(chord.definition.shortLabel, 'm11');
-  assert.deepEqual(chord.definition.tensions, ['11']);
-  assert.match(chord.definition.description, /quartal|color|extension/i);
+  assert.deepEqual(pool, ['maj7', 'm7b5', 'dim7']);
 });
 
-test('createQuestion uses fixed root and full preset option set', () => {
+test('buildChordNotes returns expected label and notes for minor 13', () => {
+  const chord = buildChordNotes('Bb', 'm13', 3);
+
+  assert.equal(chord.label, 'B♭m13');
+  assert.deepEqual(chord.noteLabels, ['B♭', 'D♭', 'F', 'A♭', 'G']);
+  assert.deepEqual(chord.audioNotes, ['A#3', 'C#4', 'F4', 'G#4', 'G5']);
+});
+
+test('createQuestion uses selected chord pool as answer options', () => {
   const question = createQuestion({
-    presetId: 'minor-extensions',
+    config: {
+      baseChordIds: ['minor'],
+      extensionIds: ['base', '9', '11', '13'],
+    },
     rootMode: 'fixed',
     fixedRoot: 'D',
     randomFn: () => 0,
@@ -40,31 +55,42 @@ test('createQuestion uses fixed root and full preset option set', () => {
 
   assert.equal(question.root, 'D');
   assert.equal(question.chordId, 'm7');
-  assert.deepEqual(question.optionLabels, ['m7', 'm9', 'm11', 'm6 / m13']);
+  assert.deepEqual(question.optionLabels, ['m7', 'm9', 'm11', 'm13']);
   assert.equal(question.signature, 'D:m7');
 });
 
-test('createQuestion avoids repeating the previous question when possible', () => {
-  const sequence = [0, 0, 0.45];
-  const question = createQuestion({
-    presetId: 'basic-sevenths',
-    rootMode: 'fixed',
-    fixedRoot: 'C',
-    previousSignature: 'C:maj7',
-    randomFn: () => sequence.shift() ?? 0.7,
-  });
+test('buildPlaybackEvents supports chord, arpeggio, and both modes', () => {
+  const notes = ['C4', 'E4', 'G4', 'B4'];
 
-  assert.notEqual(question.signature, 'C:maj7');
+  assert.deepEqual(buildPlaybackEvents(notes, 'chord'), [
+    { type: 'chord', notes, delay: 0, duration: 1.35 },
+  ]);
+
+  assert.deepEqual(buildPlaybackEvents(notes, 'arpeggio'), [
+    { type: 'note', notes: ['C4'], delay: 0, duration: 0.42 },
+    { type: 'note', notes: ['E4'], delay: 0.16, duration: 0.42 },
+    { type: 'note', notes: ['G4'], delay: 0.32, duration: 0.42 },
+    { type: 'note', notes: ['B4'], delay: 0.48, duration: 0.42 },
+  ]);
+
+  assert.deepEqual(buildPlaybackEvents(notes, 'both'), [
+    { type: 'note', notes: ['C4'], delay: 0, duration: 0.42 },
+    { type: 'note', notes: ['E4'], delay: 0.16, duration: 0.42 },
+    { type: 'note', notes: ['G4'], delay: 0.32, duration: 0.42 },
+    { type: 'note', notes: ['B4'], delay: 0.48, duration: 0.42 },
+    { type: 'chord', notes, delay: 0.8, duration: 1.35 },
+  ]);
 });
 
-test('dorian preset stays focused on minor extension colors', () => {
-  const preset = EAR_TRAINING_PRESETS.find(item => item.id === 'dorian-minor-extensions');
+test('training template captures My Ear Training style minor extension setup', () => {
+  const template = TRAINING_TEMPLATES.find(item => item.id === 'minor-extensions');
 
-  assert.ok(preset);
-  assert.deepEqual(preset.chordIds, ['m7', 'm9', 'm11', 'm6']);
-  assert.match(preset.description, /Dorian/i);
+  assert.ok(template);
+  assert.deepEqual(template.baseChordIds, ['minor']);
+  assert.deepEqual(template.extensionIds, ['base', '9', '11', '13']);
+  assert.equal(template.playbackMode, 'chord');
 });
 
 test('getChordDefinition throws for unknown ids', () => {
-  assert.throws(() => getChordDefinition('m69'), /Unknown chord/i);
+  assert.throws(() => getChordDefinition('maj11'), /Unknown chord/i);
 });

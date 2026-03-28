@@ -1,14 +1,33 @@
 import { createCustomSelect } from '../components/custom-select.js';
-import { playChord } from '../core/audio-engine.js';
+import { playPlaybackEvents } from '../core/audio-engine.js';
 import {
-  EAR_TRAINING_PRESETS,
-  EAR_TRAINING_ROOTS,
+  BASE_CHORD_TYPES,
+  EXTENSION_OPTIONS,
+  TRAINING_TEMPLATES,
+  buildChordPool,
+  buildPlaybackEvents,
   createQuestion,
+  EAR_TRAINING_ROOTS,
+  getChordDefinition,
 } from '../core/chord-ear-training.js';
 
 const QUESTION_DELAY_MS = 1400;
+const PLAYBACK_MODE_LABELS = {
+  chord: '和弦',
+  arpeggio: '琶音',
+  both: '先琶音后和弦',
+};
+
+function cloneTemplateConfig(template){
+  return {
+    baseChordIds: [...template.baseChordIds],
+    extensionIds: [...template.extensionIds],
+    playbackMode: template.playbackMode,
+  };
+}
 
 function createInitialState(){
+  const initialTemplate = TRAINING_TEMPLATES[0];
   return {
     active: false,
     answered: false,
@@ -18,17 +37,22 @@ function createInitialState(){
     currentQuestion: null,
     autoNext: false,
     rootMode: 'fixed',
+    selectedTemplateId: initialTemplate.id,
+    config: cloneTemplateConfig(initialTemplate),
     nextTimer: null,
   };
 }
 
-function buildPresetGroups(){
+function buildTemplateGroups(){
   return [{
-    label: 'Chord Packs',
-    options: EAR_TRAINING_PRESETS.map(preset => ({
-      value: preset.id,
-      label: preset.label,
-    })),
+    label: 'Quick Templates',
+    options: [
+      { value: 'custom', label: 'Custom' },
+      ...TRAINING_TEMPLATES.map(template => ({
+        value: template.id,
+        label: template.label,
+      })),
+    ],
   }];
 }
 
@@ -39,12 +63,14 @@ function buildRootGroups(){
   }];
 }
 
-function renderQuestionPrompt(questionNumber){
+function renderQuestionPrompt(questionNumber, playbackMode, optionCount){
   return `
     <div class="ear-prompt">
-      <span class="ear-prompt-kicker">Question ${questionNumber}</span>
+      <span class="ear-prompt-kicker">
+        Question ${questionNumber} · ${PLAYBACK_MODE_LABELS[playbackMode]} · ${optionCount} Options
+      </span>
       <strong>Listen</strong>
-      <p>Identify the chord quality from the current practice pack.</p>
+      <p>Identify the chord quality from the current configuration.</p>
     </div>
   `;
 }
@@ -67,9 +93,23 @@ function renderFeedbackMarkup(question, isCorrect){
         <span><b>Notes:</b> ${question.noteLabels.join(' · ')}</span>
         <span><b>Tensions:</b> ${tensionText}</span>
       </div>
-      <div class="ear-feedback-context">${question.presetDescription}</div>
+      <div class="ear-feedback-context">${PLAYBACK_MODE_LABELS[question.playbackMode]} playback</div>
     </div>
   `;
+}
+
+function renderChipButtons(items, selectedIds, kind){
+  return items.map(item => `
+    <button
+      type="button"
+      class="choice-chip ${selectedIds.includes(item.id) ? 'active' : ''}"
+      data-kind="${kind}"
+      data-id="${item.id}"
+    >
+      <span class="choice-chip-title">${item.label}</span>
+      <span class="choice-chip-subtitle">${item.description}</span>
+    </button>
+  `).join('');
 }
 
 export function initEarTraining(){
@@ -79,8 +119,30 @@ export function initEarTraining(){
   container.innerHTML = `
     <div class="card">
       <h2>和弦练耳</h2>
-      <p class="module-intro">先专注听和弦颜色，再把听感带回指板和 voicing。</p>
-      <div class="controls ear-controls" id="et-controls"></div>
+      <p class="module-intro">模板只是起点，核心是自己配置 base chord、extension 和播放方式。</p>
+      <div class="ear-config-panel">
+        <div class="controls ear-controls" id="et-controls"></div>
+        <div class="ear-chip-section">
+          <div class="ear-section-head">
+            <h3>Base Chords</h3>
+            <span>先决定题库里的和弦家族</span>
+          </div>
+          <div class="choice-chip-grid" id="et-base-grid"></div>
+        </div>
+        <div class="ear-chip-section">
+          <div class="ear-section-head">
+            <h3>Extensions</h3>
+            <span>决定是否只听 base、还是加入 9 / 11 / 13</span>
+          </div>
+          <div class="choice-chip-grid" id="et-ext-grid"></div>
+        </div>
+        <div class="ear-pool-preview" id="et-preview"></div>
+      </div>
+      <div class="controls ear-action-controls">
+        <button class="btn btn-primary" id="et-start">开始训练</button>
+        <button class="btn btn-secondary" id="et-replay">重播</button>
+        <button class="btn btn-secondary" id="et-next">下一题</button>
+      </div>
       <div class="stats">
         <span>正确: <b class="num" id="et-correct">0</b></span>
         <span>错误: <b class="num" id="et-wrong">0</b></span>
@@ -88,19 +150,25 @@ export function initEarTraining(){
         <span>已答: <b class="num" id="et-attempted">0</b></span>
       </div>
       <div class="question-display ear-question-display" id="et-question">
-        ${renderQuestionPrompt(1)}
+        ${renderQuestionPrompt(1, state.config.playbackMode, buildChordPool(state.config).length)}
       </div>
       <div class="options-grid ear-options-grid" id="et-options"></div>
       <div class="ear-feedback-shell" id="et-feedback">
-        <div class="ear-feedback-placeholder">选择练习包后点击“开始训练”。</div>
+        <div class="ear-feedback-placeholder">先配置题库，再开始训练。</div>
       </div>
     </div>
   `;
 
   const controls = document.getElementById('et-controls');
+  const baseGrid = document.getElementById('et-base-grid');
+  const extGrid = document.getElementById('et-ext-grid');
+  const previewEl = document.getElementById('et-preview');
+  const questionEl = document.getElementById('et-question');
+  const optionsEl = document.getElementById('et-options');
+  const feedbackEl = document.getElementById('et-feedback');
 
-  const presetSelect = createCustomSelect('et-preset', buildPresetGroups(), EAR_TRAINING_PRESETS[0].id);
-  controls.appendChild(presetSelect);
+  const templateSelect = createCustomSelect('et-template', buildTemplateGroups(), state.selectedTemplateId);
+  controls.appendChild(templateSelect);
 
   const rootSelect = createCustomSelect('et-root', buildRootGroups(), 'C');
   controls.appendChild(rootSelect);
@@ -114,6 +182,16 @@ export function initEarTraining(){
   `;
   controls.appendChild(rootModeToggle);
 
+  const playbackToggle = document.createElement('div');
+  playbackToggle.className = 'degree-toggle degree-toggle-wide';
+  playbackToggle.id = 'et-playback-mode';
+  playbackToggle.innerHTML = `
+    <button class="active" data-playback="chord">和弦</button>
+    <button data-playback="arpeggio">琶音</button>
+    <button data-playback="both">先琶音后和弦</button>
+  `;
+  controls.appendChild(playbackToggle);
+
   const autoNextToggle = document.createElement('div');
   autoNextToggle.className = 'degree-toggle';
   autoNextToggle.id = 'et-auto-next';
@@ -123,30 +201,28 @@ export function initEarTraining(){
   `;
   controls.appendChild(autoNextToggle);
 
-  const startButton = document.createElement('button');
-  startButton.className = 'btn btn-primary';
-  startButton.textContent = '开始训练';
-  controls.appendChild(startButton);
-
-  const replayButton = document.createElement('button');
-  replayButton.className = 'btn btn-secondary';
-  replayButton.textContent = '重播';
-  controls.appendChild(replayButton);
-
-  const nextButton = document.createElement('button');
-  nextButton.className = 'btn btn-secondary';
-  nextButton.textContent = '下一题';
-  controls.appendChild(nextButton);
-
-  const questionEl = document.getElementById('et-question');
-  const optionsEl = document.getElementById('et-options');
-  const feedbackEl = document.getElementById('et-feedback');
+  const startButton = document.getElementById('et-start');
+  const replayButton = document.getElementById('et-replay');
+  const nextButton = document.getElementById('et-next');
 
   function clearNextTimer(){
     if(state.nextTimer){
       clearTimeout(state.nextTimer);
       state.nextTimer = null;
     }
+  }
+
+  function getCurrentPool(){
+    return buildChordPool(state.config);
+  }
+
+  function setTemplateSelection(templateId){
+    state.selectedTemplateId = templateId;
+    templateSelect.setValue(templateId);
+  }
+
+  function markAsCustom(){
+    setTemplateSelection('custom');
   }
 
   function updateStats(){
@@ -157,6 +233,28 @@ export function initEarTraining(){
       ? Math.round((state.correct / state.attempted) * 100)
       : 0;
     document.getElementById('et-rate').textContent = `${rate}%`;
+  }
+
+  function updatePreview(){
+    const pool = getCurrentPool();
+    const labels = pool.map(chordId => getChordDefinition(chordId).answerLabel);
+    previewEl.innerHTML = `
+      <div class="ear-preview-head">
+        <strong>Current Pool</strong>
+        <span>${pool.length} chords · ${PLAYBACK_MODE_LABELS[state.config.playbackMode]}</span>
+      </div>
+      <div class="ear-preview-list">${labels.join(' · ')}</div>
+    `;
+    rootSelect.classList.toggle('is-disabled', state.rootMode === 'random');
+  }
+
+  function renderConfigChips(){
+    baseGrid.innerHTML = renderChipButtons(BASE_CHORD_TYPES, state.config.baseChordIds, 'base');
+    extGrid.innerHTML = renderChipButtons(EXTENSION_OPTIONS, state.config.extensionIds, 'extension');
+    playbackToggle.querySelectorAll('button').forEach(button => {
+      button.classList.toggle('active', button.dataset.playback === state.config.playbackMode);
+    });
+    updatePreview();
   }
 
   function renderOptions(question){
@@ -174,25 +272,31 @@ export function initEarTraining(){
   }
 
   function renderQuestion(question){
-    questionEl.innerHTML = renderQuestionPrompt(state.attempted + 1);
+    questionEl.innerHTML = renderQuestionPrompt(
+      state.attempted + 1,
+      state.config.playbackMode,
+      question.optionIds.length,
+    );
     feedbackEl.innerHTML = '<div class="ear-feedback-placeholder">先听，再选。</div>';
     renderOptions(question);
   }
 
   async function playCurrentQuestion(){
     if(!state.currentQuestion) return;
-    await playChord(state.currentQuestion.audioNotes, { duration: 1.35 });
+    const events = buildPlaybackEvents(state.currentQuestion.audioNotes, state.config.playbackMode);
+    await playPlaybackEvents(events);
   }
 
   async function loadNextQuestion(){
     clearNextTimer();
     state.answered = false;
     state.currentQuestion = createQuestion({
-      presetId: presetSelect.getValue(),
+      config: state.config,
       rootMode: state.rootMode,
       fixedRoot: rootSelect.getValue(),
       previousSignature: state.currentQuestion?.signature ?? null,
     });
+    state.currentQuestion.playbackMode = state.config.playbackMode;
     renderQuestion(state.currentQuestion);
     await playCurrentQuestion();
   }
@@ -255,21 +359,37 @@ export function initEarTraining(){
     scheduleNextQuestion();
   }
 
-  function updateRootMode(toggleButton){
-    state.rootMode = toggleButton.dataset.mode;
-    rootModeToggle.querySelectorAll('button').forEach(button => {
-      button.classList.toggle('active', button === toggleButton);
-    });
+  function restartIfActive(){
+    if(state.active){
+      startSession();
+    } else {
+      updatePreview();
+      questionEl.innerHTML = renderQuestionPrompt(1, state.config.playbackMode, getCurrentPool().length);
+    }
   }
 
-  function updateAutoNext(toggleButton){
-    state.autoNext = toggleButton.dataset.auto === 'on';
-    autoNextToggle.querySelectorAll('button').forEach(button => {
-      button.classList.toggle('active', button === toggleButton);
-    });
-    if(!state.autoNext){
-      clearNextTimer();
+  function toggleListValue(list, value){
+    if(list.includes(value)){
+      if(list.length === 1) return list;
+      return list.filter(item => item !== value);
     }
+    return [...list, value];
+  }
+
+  function applyTemplate(templateId){
+    const template = TRAINING_TEMPLATES.find(item => item.id === templateId);
+    if(!template) return;
+    state.config = cloneTemplateConfig(template);
+    setTemplateSelection(template.id);
+    renderConfigChips();
+    restartIfActive();
+  }
+
+  function handleConfigMutation(updater){
+    state.config = updater(state.config);
+    markAsCustom();
+    renderConfigChips();
+    restartIfActive();
   }
 
   startButton.addEventListener('click', () => {
@@ -288,25 +408,68 @@ export function initEarTraining(){
     loadNextQuestion();
   });
 
+  templateSelect.addEventListener('change', event => {
+    const nextValue = event.detail?.value ?? templateSelect.getValue();
+    if(nextValue === 'custom'){
+      setTemplateSelection('custom');
+      return;
+    }
+    applyTemplate(nextValue);
+  });
+
+  rootSelect.addEventListener('change', () => {
+    restartIfActive();
+  });
+
   rootModeToggle.addEventListener('click', event => {
     const toggleButton = event.target.closest('button[data-mode]');
     if(!toggleButton) return;
-    updateRootMode(toggleButton);
+    state.rootMode = toggleButton.dataset.mode;
+    rootModeToggle.querySelectorAll('button').forEach(button => {
+      button.classList.toggle('active', button === toggleButton);
+    });
+    restartIfActive();
+  });
+
+  playbackToggle.addEventListener('click', event => {
+    const toggleButton = event.target.closest('button[data-playback]');
+    if(!toggleButton) return;
+    handleConfigMutation(config => ({
+      ...config,
+      playbackMode: toggleButton.dataset.playback,
+    }));
   });
 
   autoNextToggle.addEventListener('click', event => {
     const toggleButton = event.target.closest('button[data-auto]');
     if(!toggleButton) return;
-    updateAutoNext(toggleButton);
-  });
-
-  [presetSelect, rootSelect].forEach(select => {
-    select.addEventListener('change', () => {
-      if(state.active){
-        startSession();
-      }
+    state.autoNext = toggleButton.dataset.auto === 'on';
+    autoNextToggle.querySelectorAll('button').forEach(button => {
+      button.classList.toggle('active', button === toggleButton);
     });
+    if(!state.autoNext){
+      clearNextTimer();
+    }
   });
 
+  baseGrid.addEventListener('click', event => {
+    const button = event.target.closest('button[data-kind="base"]');
+    if(!button) return;
+    handleConfigMutation(config => ({
+      ...config,
+      baseChordIds: toggleListValue(config.baseChordIds, button.dataset.id),
+    }));
+  });
+
+  extGrid.addEventListener('click', event => {
+    const button = event.target.closest('button[data-kind="extension"]');
+    if(!button) return;
+    handleConfigMutation(config => ({
+      ...config,
+      extensionIds: toggleListValue(config.extensionIds, button.dataset.id),
+    }));
+  });
+
+  renderConfigChips();
   updateStats();
 }

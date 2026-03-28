@@ -4,7 +4,42 @@ let synth = null;
 let polySynth = null;
 let membraneSynth = null;
 let metalSynth = null;
+let pianoSampler = null;
+let pianoLoadPromise = null;
 let started = false;
+
+const PIANO_SAMPLE_MAP = {
+  A0: 'A0.mp3',
+  C1: 'C1.mp3',
+  'D#1': 'Ds1.mp3',
+  'F#1': 'Fs1.mp3',
+  A1: 'A1.mp3',
+  C2: 'C2.mp3',
+  'D#2': 'Ds2.mp3',
+  'F#2': 'Fs2.mp3',
+  A2: 'A2.mp3',
+  C3: 'C3.mp3',
+  'D#3': 'Ds3.mp3',
+  'F#3': 'Fs3.mp3',
+  A3: 'A3.mp3',
+  C4: 'C4.mp3',
+  'D#4': 'Ds4.mp3',
+  'F#4': 'Fs4.mp3',
+  A4: 'A4.mp3',
+  C5: 'C5.mp3',
+  'D#5': 'Ds5.mp3',
+  'F#5': 'Fs5.mp3',
+  A5: 'A5.mp3',
+  C6: 'C6.mp3',
+  'D#6': 'Ds6.mp3',
+  'F#6': 'Fs6.mp3',
+  A6: 'A6.mp3',
+  C7: 'C7.mp3',
+  'D#7': 'Ds7.mp3',
+  'F#7': 'Fs7.mp3',
+  A7: 'A7.mp3',
+  C8: 'C8.mp3',
+};
 
 export async function ensureStarted(){
   if(!started){ await Tone.start(); started = true; }
@@ -29,14 +64,66 @@ export function getPolySynth(){
   return polySynth;
 }
 
-export async function playChord(noteNames, options = {}){
+export function getPianoSampler(){
+  if(!pianoSampler){
+    pianoSampler = new Tone.Sampler({
+      urls: PIANO_SAMPLE_MAP,
+      release: 1.4,
+      baseUrl: 'https://tonejs.github.io/audio/salamander/',
+    }).toDestination();
+    pianoSampler.volume.value = -3;
+  }
+  return pianoSampler;
+}
+
+async function ensurePianoReady(){
   await ensureStarted();
-  const instrument = getPolySynth();
+  const instrument = getPianoSampler();
+  if(!pianoLoadPromise){
+    pianoLoadPromise = Tone.loaded();
+  }
+  await pianoLoadPromise;
+  return instrument;
+}
+
+export async function playChord(noteNames, options = {}){
+  let instrument;
+  try {
+    instrument = await ensurePianoReady();
+  } catch {
+    instrument = getPolySynth();
+  }
   const duration = options.duration ?? 1.3;
   const when = Tone.now() + (options.delay ?? 0);
 
-  instrument.releaseAll();
+  if(typeof instrument.releaseAll === 'function'){
+    instrument.releaseAll();
+  }
   instrument.triggerAttackRelease(noteNames, duration, when);
+}
+
+export async function playPlaybackEvents(events){
+  if(!events?.length) return;
+
+  let instrument;
+  try {
+    instrument = await ensurePianoReady();
+  } catch {
+    instrument = getPolySynth();
+  }
+
+  const startTime = Tone.now() + 0.05;
+  if(typeof instrument.releaseAll === 'function'){
+    instrument.releaseAll();
+  }
+
+  events.forEach(event => {
+    instrument.triggerAttackRelease(
+      event.notes,
+      event.duration,
+      startTime + event.delay,
+    );
+  });
 }
 
 export function getMembraneSynth(){
