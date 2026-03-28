@@ -103,7 +103,7 @@ test('buildChordNotes can generate explicit first inversion voicings for triads'
 
   assert.equal(chord.label, 'Cmaj');
   assert.equal(chord.inversion, 1);
-  assert.equal(chord.voicingLabel, '封闭一转位');
+  assert.equal(chord.voicingLabel, '一转位');
   assert.deepEqual(chord.noteLabels, ['E', 'G', 'C']);
   assert.deepEqual(chord.audioNotes, ['E3', 'G3', 'C4']);
 });
@@ -116,7 +116,7 @@ test('buildChordNotes can generate explicit third inversion voicings for seventh
 
   assert.equal(chord.label, 'C7');
   assert.equal(chord.inversion, 3);
-  assert.equal(chord.voicingLabel, '封闭三转位');
+  assert.equal(chord.voicingLabel, '三转位');
   assert.deepEqual(chord.noteLabels, ['B♭', 'C', 'E', 'G']);
   assert.deepEqual(chord.audioNotes, ['A#3', 'C4', 'E4', 'G4']);
 });
@@ -135,7 +135,7 @@ test('createQuestion uses selected chord pool as answer options', () => {
 
   assert.equal(question.root, 'D');
   assert.equal(question.chordId, '7');
-  assert.equal(question.voicingLabel, '封闭原位');
+  assert.equal(question.voicingLabel, '原位');
   assert.deepEqual(question.optionLabels, ['7', '7♭9', '9', '7♯9']);
   assert.equal(question.signature, 'D:7:0');
 });

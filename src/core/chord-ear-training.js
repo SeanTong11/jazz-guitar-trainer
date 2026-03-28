@@ -101,27 +101,27 @@ export const TENSION_OPTIONS = [
 export const VOICING_OPTIONS = [
   {
     id: 'close-root',
-    label: '封闭原位',
+    label: '原位',
     description: 'Closed position with the root in the bass.',
   },
   {
     id: 'close-first',
-    label: '封闭一转位',
+    label: '一转位',
     description: 'Closed position with the first inversion in the bass.',
   },
   {
     id: 'close-second',
-    label: '封闭二转位',
+    label: '二转位',
     description: 'Closed position with the second inversion in the bass.',
   },
   {
     id: 'close-third',
-    label: '封闭三转位',
+    label: '三转位',
     description: 'Closed position with the third inversion in the bass.',
   },
   {
     id: 'close-random',
-    label: '封闭随机转位',
+    label: '随机转位',
     description: 'Closed position with the inversion chosen randomly each time.',
   },
 ];
@@ -487,7 +487,7 @@ function applyCloseVoicing(intervals, inversion){
 }
 
 function getVoicingLabel(inversion){
-  return `封闭${getInversionLabel(inversion)}`;
+  return getInversionLabel(inversion);
 }
 
 function getVoicingVariantCount(chordId, voicingMode){

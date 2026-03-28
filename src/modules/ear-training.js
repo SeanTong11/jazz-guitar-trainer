@@ -126,7 +126,7 @@ export function initEarTraining(){
   container.innerHTML = `
     <div class="card">
       <h2>和弦练耳</h2>
-      <p class="module-intro">模板只是起点，核心是自己配置 base chord、单个 tension、播放方式，以及封闭排列下的指定转位。</p>
+      <p class="module-intro">模板只是起点，核心是自己配置 base chord、单个 tension、播放方式和转位。当前版本仅支持封闭排列。</p>
       <div class="ear-config-panel">
         <div class="controls ear-controls" id="et-controls"></div>
         <div class="ear-chip-section">
