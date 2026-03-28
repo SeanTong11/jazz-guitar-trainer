@@ -9,6 +9,8 @@ import {
   buildPlaybackEvents,
   createQuestion,
   EAR_TRAINING_ROOTS,
+  getAnswerModeContext,
+  getAvailableRandomVoicingOptionIds,
   getAvailableVoicingOptionIds,
   getChordDefinition,
 } from '../core/chord-ear-training.js';
@@ -18,6 +20,11 @@ const PLAYBACK_MODE_LABELS = {
   chord: '和弦',
   arpeggio: '琶音',
   both: '先琶音后和弦',
+};
+const ANSWER_MODE_LABELS = {
+  chord: '和弦',
+  root: '根音',
+  inversion: '转位',
 };
 const VOICING_MODE_LABELS = Object.fromEntries(
   VOICING_OPTIONS.map(option => [option.id, option.label]),
@@ -29,6 +36,8 @@ function cloneTemplateConfig(template){
     tensionIds: [...template.tensionIds],
     playbackMode: template.playbackMode,
     voicingMode: template.voicingMode ?? 'close-root',
+    randomRootIds: [],
+    randomVoicingIds: [],
   };
 }
 
@@ -69,14 +78,22 @@ function buildRootGroups(){
   }];
 }
 
-function renderQuestionPrompt(questionNumber, playbackMode, voicingMode, optionCount){
+function getPromptText(answerMode){
+  return {
+    chord: 'Identify the chord quality from the current configuration.',
+    root: 'Identify the root from the current configuration.',
+    inversion: 'Identify the inversion from the current configuration.',
+  }[answerMode];
+}
+
+function renderQuestionPrompt(questionNumber, playbackMode, voicingMode, answerMode, optionCount){
   return `
     <div class="ear-prompt">
       <span class="ear-prompt-kicker">
-        Question ${questionNumber} · ${PLAYBACK_MODE_LABELS[playbackMode]} · ${VOICING_MODE_LABELS[voicingMode]} · ${optionCount} Options
+        Question ${questionNumber} · ${PLAYBACK_MODE_LABELS[playbackMode]} · ${VOICING_MODE_LABELS[voicingMode]} · 识别${ANSWER_MODE_LABELS[answerMode]} · ${optionCount} Options
       </span>
       <strong>Listen</strong>
-      <p>Identify the chord quality from the current configuration.</p>
+      <p>${getPromptText(answerMode)}</p>
     </div>
   `;
 }
@@ -99,6 +116,7 @@ function renderFeedbackMarkup(question, isCorrect){
         <span><b>Notes:</b> ${question.noteLabels.join(' · ')}</span>
         <span><b>Tensions:</b> ${tensionText}</span>
         <span><b>Voicing:</b> ${question.voicingLabel}</span>
+        <span><b>Target:</b> ${ANSWER_MODE_LABELS[question.answerMode]}</span>
       </div>
       <div class="ear-feedback-context">${PLAYBACK_MODE_LABELS[question.playbackMode]} playback · ${question.voicingLabel}</div>
     </div>
@@ -117,6 +135,50 @@ function renderChipButtons(items, selectedIds, kind){
       <span class="choice-chip-subtitle">${item.description}</span>
     </button>
   `).join('');
+}
+
+function renderFilterChips(items, selectedIds, kind){
+  return items.map(item => `
+    <button
+      type="button"
+      class="filter-chip ${selectedIds.includes(item.id) ? 'active' : ''}"
+      data-kind="${kind}"
+      data-id="${item.id}"
+    >
+      ${item.label}
+    </button>
+  `).join('');
+}
+
+function toggleRequiredListValue(list, value){
+  if(list.includes(value)){
+    if(list.length === 1) return list;
+    return list.filter(item => item !== value);
+  }
+  return [...list, value];
+}
+
+function toggleOptionalListValue(list, value){
+  if(list.includes(value)){
+    return list.filter(item => item !== value);
+  }
+  return [...list, value];
+}
+
+function formatRandomRootSummary(selectedIds){
+  if(!selectedIds.length) return '全部根音';
+  return EAR_TRAINING_ROOTS
+    .filter(root => selectedIds.includes(root.value))
+    .map(root => root.label)
+    .join(' · ');
+}
+
+function formatRandomVoicingSummary(selectedIds){
+  if(!selectedIds.length) return '全部可用转位';
+  return VOICING_OPTIONS
+    .filter(option => selectedIds.includes(option.id))
+    .map(option => option.label)
+    .join(' · ');
 }
 
 export function initEarTraining(){
@@ -143,6 +205,20 @@ export function initEarTraining(){
           </div>
           <div class="choice-chip-grid" id="et-ext-grid"></div>
         </div>
+        <div class="ear-chip-section" id="et-root-pool-section" hidden>
+          <div class="ear-section-head">
+            <h3>随机根音范围</h3>
+            <span>不选则全随机；如果当前只剩一个和弦答案，会改成根音辨识</span>
+          </div>
+          <div class="filter-chip-grid" id="et-root-pool-grid"></div>
+        </div>
+        <div class="ear-chip-section" id="et-voicing-pool-section" hidden>
+          <div class="ear-section-head">
+            <h3>随机转位范围</h3>
+            <span>不选则当前可用转位全随机；如果当前只剩一个和弦答案，会改成转位辨识</span>
+          </div>
+          <div class="filter-chip-grid" id="et-voicing-pool-grid"></div>
+        </div>
         <div class="ear-pool-preview" id="et-preview"></div>
       </div>
       <div class="controls ear-action-controls">
@@ -157,9 +233,7 @@ export function initEarTraining(){
         <span>正确率: <b class="num" id="et-rate">0%</b></span>
         <span>已答: <b class="num" id="et-attempted">0</b></span>
       </div>
-      <div class="question-display ear-question-display" id="et-question">
-        ${renderQuestionPrompt(1, state.config.playbackMode, state.config.voicingMode, buildChordPool(state.config).length)}
-      </div>
+      <div class="question-display ear-question-display" id="et-question"></div>
       <div class="options-grid ear-options-grid" id="et-options"></div>
       <div class="ear-feedback-shell" id="et-feedback">
         <div class="ear-feedback-placeholder">先配置题库，再开始训练。</div>
@@ -170,6 +244,10 @@ export function initEarTraining(){
   const controls = document.getElementById('et-controls');
   const baseGrid = document.getElementById('et-base-grid');
   const extGrid = document.getElementById('et-ext-grid');
+  const rootPoolSection = document.getElementById('et-root-pool-section');
+  const rootPoolGrid = document.getElementById('et-root-pool-grid');
+  const voicingPoolSection = document.getElementById('et-voicing-pool-section');
+  const voicingPoolGrid = document.getElementById('et-voicing-pool-grid');
   const previewEl = document.getElementById('et-preview');
   const questionEl = document.getElementById('et-question');
   const optionsEl = document.getElementById('et-options');
@@ -237,14 +315,28 @@ export function initEarTraining(){
     return buildChordPool(state.config);
   }
 
+  function getAnswerContext(){
+    return getAnswerModeContext({
+      config: state.config,
+      rootMode: state.rootMode,
+      fixedRoot: rootSelect.getValue(),
+    });
+  }
+
   function normalizeConfig(nextConfig){
     const availableVoicingIds = getAvailableVoicingOptionIds(nextConfig);
+    const availableRandomVoicingIds = getAvailableRandomVoicingOptionIds(nextConfig);
     const fallbackVoicingId = availableVoicingIds[0] ?? 'close-root';
+
     return {
       ...nextConfig,
       voicingMode: availableVoicingIds.includes(nextConfig.voicingMode)
         ? nextConfig.voicingMode
         : fallbackVoicingId,
+      randomRootIds: (nextConfig.randomRootIds ?? [])
+        .filter(rootId => EAR_TRAINING_ROOTS.some(root => root.value === rootId)),
+      randomVoicingIds: (nextConfig.randomVoicingIds ?? [])
+        .filter(optionId => availableRandomVoicingIds.includes(optionId)),
     };
   }
 
@@ -269,6 +361,7 @@ export function initEarTraining(){
 
   function updatePreview(){
     const pool = getCurrentPool();
+    const answerContext = getAnswerContext();
     rootSelect.setDisabled(state.rootMode === 'random');
     startButton.disabled = pool.length === 0;
 
@@ -276,7 +369,7 @@ export function initEarTraining(){
       previewEl.innerHTML = `
         <div class="ear-preview-head">
           <strong>Current Pool</strong>
-          <span>0 chords · ${PLAYBACK_MODE_LABELS[state.config.playbackMode]} · ${VOICING_MODE_LABELS[state.config.voicingMode]}</span>
+          <span>0 chords · ${PLAYBACK_MODE_LABELS[state.config.playbackMode]} · 识别${ANSWER_MODE_LABELS[answerContext.answerMode]}</span>
         </div>
         <div class="ear-preview-empty">当前选择没有生成出有效题目，请至少保留一个兼容的 base chord + tension 组合。</div>
       `;
@@ -287,7 +380,12 @@ export function initEarTraining(){
     previewEl.innerHTML = `
       <div class="ear-preview-head">
         <strong>Current Pool</strong>
-        <span>${pool.length} chords · ${PLAYBACK_MODE_LABELS[state.config.playbackMode]} · ${VOICING_MODE_LABELS[state.config.voicingMode]}</span>
+        <span>${pool.length} chords · ${PLAYBACK_MODE_LABELS[state.config.playbackMode]} · 识别${ANSWER_MODE_LABELS[answerContext.answerMode]}</span>
+      </div>
+      <div class="ear-preview-meta">
+        <span>转位: ${VOICING_MODE_LABELS[state.config.voicingMode]}</span>
+        ${state.rootMode === 'random' ? `<span>根音范围: ${formatRandomRootSummary(state.config.randomRootIds)}</span>` : ''}
+        ${state.config.voicingMode === 'close-random' ? `<span>转位范围: ${formatRandomVoicingSummary(state.config.randomVoicingIds)}</span>` : ''}
       </div>
       <div class="ear-preview-list">${labels.join(' · ')}</div>
     `;
@@ -295,17 +393,42 @@ export function initEarTraining(){
 
   function renderConfigChips(){
     const availableVoicingIds = getAvailableVoicingOptionIds(state.config);
+    const availableRandomVoicingIds = getAvailableRandomVoicingOptionIds(state.config);
+
     baseGrid.innerHTML = renderChipButtons(BASE_CHORD_TYPES, state.config.baseChordIds, 'base');
     extGrid.innerHTML = renderChipButtons(TENSION_OPTIONS, state.config.tensionIds, 'tension');
+
+    rootPoolSection.hidden = state.rootMode !== 'random';
+    rootPoolGrid.innerHTML = state.rootMode === 'random'
+      ? renderFilterChips(
+        EAR_TRAINING_ROOTS.map(root => ({ id: root.value, label: root.label })),
+        state.config.randomRootIds,
+        'random-root',
+      )
+      : '';
+
+    voicingPoolSection.hidden = state.config.voicingMode !== 'close-random';
+    voicingPoolGrid.innerHTML = state.config.voicingMode === 'close-random'
+      ? renderFilterChips(
+        VOICING_OPTIONS
+          .filter(option => availableRandomVoicingIds.includes(option.id))
+          .map(option => ({ id: option.id, label: option.label })),
+        state.config.randomVoicingIds,
+        'random-voicing',
+      )
+      : '';
+
     playbackToggle.querySelectorAll('button').forEach(button => {
       button.classList.toggle('active', button.dataset.playback === state.config.playbackMode);
     });
+
     voicingToggle.querySelectorAll('button').forEach(button => {
       const isAvailable = availableVoicingIds.includes(button.dataset.voicing);
       button.disabled = !isAvailable;
       button.classList.toggle('is-disabled', !isAvailable);
       button.classList.toggle('active', button.dataset.voicing === state.config.voicingMode);
     });
+
     updatePreview();
   }
 
@@ -325,11 +448,12 @@ export function initEarTraining(){
 
   function renderQuestion(question){
     questionEl.innerHTML = renderQuestionPrompt(
-        state.attempted + 1,
-        state.config.playbackMode,
-        question.voicingMode,
-        question.optionIds.length,
-      );
+      state.attempted + 1,
+      state.config.playbackMode,
+      question.voicingMode,
+      question.answerMode,
+      question.optionIds.length,
+    );
     feedbackEl.innerHTML = '<div class="ear-feedback-placeholder">先听，再选。</div>';
     renderOptions(question);
   }
@@ -345,10 +469,12 @@ export function initEarTraining(){
     state.active = false;
     state.answered = false;
     state.currentQuestion = null;
+    const answerContext = getAnswerContext();
     questionEl.innerHTML = renderQuestionPrompt(
       1,
       state.config.playbackMode,
       state.config.voicingMode,
+      answerContext.answerMode,
       0,
     );
     optionsEl.innerHTML = '';
@@ -374,6 +500,7 @@ export function initEarTraining(){
       showEmptyPoolState();
       return;
     }
+
     clearNextTimer();
     state.active = true;
     state.answered = false;
@@ -394,7 +521,7 @@ export function initEarTraining(){
 
   function markCorrectAnswer(question){
     optionsEl.querySelectorAll('.opt-btn').forEach(button => {
-      if(button.dataset.optionId === question.chordId){
+      if(button.dataset.optionId === question.correctOptionId){
         button.classList.add('correct');
       }
     });
@@ -415,7 +542,7 @@ export function initEarTraining(){
     state.answered = true;
     state.attempted += 1;
 
-    const isCorrect = optionId === state.currentQuestion.chordId;
+    const isCorrect = optionId === state.currentQuestion.correctOptionId;
     if(isCorrect){
       state.correct += 1;
       button.classList.add('correct');
@@ -440,23 +567,18 @@ export function initEarTraining(){
 
     if(state.active){
       startSession();
-    } else {
-      updatePreview();
-      questionEl.innerHTML = renderQuestionPrompt(
-        1,
-        state.config.playbackMode,
-        state.config.voicingMode,
-        getCurrentPool().length,
-      );
+      return;
     }
-  }
 
-  function toggleListValue(list, value){
-    if(list.includes(value)){
-      if(list.length === 1) return list;
-      return list.filter(item => item !== value);
-    }
-    return [...list, value];
+    updatePreview();
+    const answerContext = getAnswerContext();
+    questionEl.innerHTML = renderQuestionPrompt(
+      1,
+      state.config.playbackMode,
+      state.config.voicingMode,
+      answerContext.answerMode,
+      answerContext.optionIds.length,
+    );
   }
 
   function applyTemplate(templateId){
@@ -515,6 +637,7 @@ export function initEarTraining(){
     rootModeToggle.querySelectorAll('button').forEach(button => {
       button.classList.toggle('active', button === toggleButton);
     });
+    renderConfigChips();
     restartIfActive();
   });
 
@@ -553,7 +676,7 @@ export function initEarTraining(){
     if(!button) return;
     handleConfigMutation(config => ({
       ...config,
-      baseChordIds: toggleListValue(config.baseChordIds, button.dataset.id),
+      baseChordIds: toggleRequiredListValue(config.baseChordIds, button.dataset.id),
     }));
   });
 
@@ -562,10 +685,29 @@ export function initEarTraining(){
     if(!button) return;
     handleConfigMutation(config => ({
       ...config,
-      tensionIds: toggleListValue(config.tensionIds, button.dataset.id),
+      tensionIds: toggleRequiredListValue(config.tensionIds, button.dataset.id),
+    }));
+  });
+
+  rootPoolGrid.addEventListener('click', event => {
+    const button = event.target.closest('button[data-kind="random-root"]');
+    if(!button) return;
+    handleConfigMutation(config => ({
+      ...config,
+      randomRootIds: toggleOptionalListValue(config.randomRootIds, button.dataset.id),
+    }));
+  });
+
+  voicingPoolGrid.addEventListener('click', event => {
+    const button = event.target.closest('button[data-kind="random-voicing"]');
+    if(!button) return;
+    handleConfigMutation(config => ({
+      ...config,
+      randomVoicingIds: toggleOptionalListValue(config.randomVoicingIds, button.dataset.id),
     }));
   });
 
   renderConfigChips();
   updateStats();
+  restartIfActive();
 }

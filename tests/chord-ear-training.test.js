@@ -74,7 +74,8 @@ test('buildChordPool filters out chords that cannot support the selected inversi
   const pool = buildChordPool({
     baseChordIds: ['major-triad', 'minor-triad', 'dominant'],
     tensionIds: ['none'],
-    voicingMode: 'close-third',
+    voicingMode: 'close-random',
+    randomVoicingIds: ['close-third'],
   });
 
   assert.deepEqual(pool, ['7']);
@@ -138,6 +139,63 @@ test('createQuestion uses selected chord pool as answer options', () => {
   assert.equal(question.voicingLabel, '原位');
   assert.deepEqual(question.optionLabels, ['7', '7♭9', '9', '7♯9']);
   assert.equal(question.signature, 'D:7:0');
+});
+
+test('createQuestion switches to root answers when only one chord is left and root is random', () => {
+  const question = createQuestion({
+    config: {
+      baseChordIds: ['major-triad'],
+      tensionIds: ['none'],
+      voicingMode: 'close-root',
+      randomRootIds: ['C', 'D', 'E'],
+    },
+    rootMode: 'random',
+    fixedRoot: 'C',
+    randomFn: () => 0,
+  });
+
+  assert.equal(question.answerMode, 'root');
+  assert.equal(question.correctOptionId, 'C');
+  assert.deepEqual(question.optionLabels, ['C', 'D', 'E']);
+  assert.equal(question.promptLabel, '根音');
+});
+
+test('createQuestion switches to inversion answers when only one chord is left and inversion is random', () => {
+  const question = createQuestion({
+    config: {
+      baseChordIds: ['major-triad'],
+      tensionIds: ['none'],
+      voicingMode: 'close-random',
+      randomVoicingIds: ['close-first', 'close-second'],
+    },
+    rootMode: 'fixed',
+    fixedRoot: 'C',
+    randomFn: () => 0,
+  });
+
+  assert.equal(question.answerMode, 'inversion');
+  assert.equal(question.correctOptionId, 'close-first');
+  assert.deepEqual(question.optionLabels, ['一转位', '二转位']);
+  assert.equal(question.promptLabel, '转位');
+});
+
+test('createQuestion keeps chord answers when multiple chord options remain even with random root challenge', () => {
+  const question = createQuestion({
+    config: {
+      baseChordIds: ['major-triad', 'minor-triad'],
+      tensionIds: ['none'],
+      voicingMode: 'close-root',
+      randomRootIds: ['C', 'D', 'E'],
+    },
+    rootMode: 'random',
+    fixedRoot: 'C',
+    randomFn: () => 0,
+  });
+
+  assert.equal(question.answerMode, 'chord');
+  assert.equal(question.correctOptionId, 'maj');
+  assert.deepEqual(question.optionLabels, ['maj', 'm']);
+  assert.equal(question.promptLabel, '和弦');
 });
 
 test('buildPlaybackEvents supports chord, arpeggio, and both modes', () => {

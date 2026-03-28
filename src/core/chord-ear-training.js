@@ -126,6 +126,14 @@ export const VOICING_OPTIONS = [
   },
 ];
 
+const SPECIFIC_VOICING_OPTION_IDS = ['close-root', 'close-first', 'close-second', 'close-third'];
+const VOICING_ID_TO_INVERSION = {
+  'close-root': 0,
+  'close-first': 1,
+  'close-second': 2,
+  'close-third': 3,
+};
+
 const FAMILY_CONFIG = {
   'major-triad': {
     baseId: 'maj',
@@ -432,6 +440,7 @@ function normalizeOptions(optionsOrBaseOctave){
     return {
       baseOctave: optionsOrBaseOctave,
       voicingMode: 'close-root',
+      randomVoicingIds: [],
       randomFn: Math.random,
     };
   }
@@ -439,6 +448,7 @@ function normalizeOptions(optionsOrBaseOctave){
   return {
     baseOctave: optionsOrBaseOctave?.baseOctave ?? 3,
     voicingMode: optionsOrBaseOctave?.voicingMode ?? 'close-root',
+    randomVoicingIds: optionsOrBaseOctave?.randomVoicingIds ?? [],
     randomFn: optionsOrBaseOctave?.randomFn ?? Math.random,
   };
 }
@@ -454,11 +464,25 @@ function getMaxInversion(familyId){
   return Math.max(FAMILY_CONFIG[familyId].shellIntervals.length - 1, 0);
 }
 
-function getAvailableInversions(familyId, voicingMode){
+function getSpecificVoicingOptionIdsForFamily(familyId){
+  const maxInversion = getMaxInversion(familyId);
+  return SPECIFIC_VOICING_OPTION_IDS.filter(optionId => VOICING_ID_TO_INVERSION[optionId] <= maxInversion);
+}
+
+function getRandomVoicingOptionIdsForFamily(familyId, randomVoicingIds = []){
+  const availableOptionIds = getSpecificVoicingOptionIdsForFamily(familyId);
+  if(Array.isArray(randomVoicingIds) && randomVoicingIds.length){
+    return randomVoicingIds.filter(optionId => availableOptionIds.includes(optionId));
+  }
+  return availableOptionIds;
+}
+
+function getAvailableInversions(familyId, voicingMode, randomVoicingIds = []){
   const maxInversion = getMaxInversion(familyId);
 
   if(voicingMode === 'close-random'){
-    return Array.from({ length: maxInversion + 1 }, (_, index) => index);
+    return getRandomVoicingOptionIdsForFamily(familyId, randomVoicingIds)
+      .map(optionId => VOICING_ID_TO_INVERSION[optionId]);
   }
 
   if(voicingMode === 'close-root'){
@@ -490,18 +514,75 @@ function getVoicingLabel(inversion){
   return getInversionLabel(inversion);
 }
 
-function getVoicingVariantCount(chordId, voicingMode){
+function getVoicingVariantCount(chordId, config = {}){
   const definition = getChordDefinition(chordId);
-  return getAvailableInversions(definition.familyId, voicingMode).length;
+  return getAvailableInversions(
+    definition.familyId,
+    config.voicingMode ?? 'close-root',
+    config.randomVoicingIds,
+  ).length;
 }
 
-function getQuestionVariantCount(chordPool, rootMode, voicingMode){
-  const rootCount = rootMode === 'random' ? CHROMATIC_ROOTS.length : 1;
+function getRootCandidates(rootMode = 'fixed', fixedRoot = 'C', randomRootIds = []){
+  if(rootMode !== 'random'){
+    return [fixedRoot];
+  }
+
+  const selectedRoots = randomRootIds.filter(root => CHROMATIC_ROOTS.includes(root));
+  return selectedRoots.length ? selectedRoots : [...CHROMATIC_ROOTS];
+}
+
+function getQuestionVariantCount(chordPool, rootMode, fixedRoot, config = {}){
+  const rootCount = getRootCandidates(rootMode, fixedRoot, config.randomRootIds).length;
   const voicingCount = chordPool.reduce(
-    (total, chordId) => total + getVoicingVariantCount(chordId, voicingMode),
+    (total, chordId) => total + getVoicingVariantCount(chordId, config),
     0,
   );
   return rootCount * voicingCount;
+}
+
+function getVoicingOptionLabel(optionId){
+  return VOICING_OPTIONS.find(option => option.id === optionId)?.label ?? optionId;
+}
+
+export function getAnswerModeContext({
+  config = {},
+  rootMode = 'fixed',
+  fixedRoot = 'C',
+} = {}){
+  const chordPool = buildChordPool(config);
+  const safePool = chordPool.length ? chordPool : buildChordPool();
+  const rootCandidates = getRootCandidates(rootMode, fixedRoot, config.randomRootIds);
+  const singleChordId = safePool.length === 1 ? safePool[0] : null;
+  const singleDefinition = singleChordId ? getChordDefinition(singleChordId) : null;
+  const inversionOptionIds = singleDefinition
+    ? getRandomVoicingOptionIdsForFamily(singleDefinition.familyId, config.randomVoicingIds)
+    : [];
+
+  if(singleChordId && rootCandidates.length > 1){
+    return {
+      answerMode: 'root',
+      promptLabel: '根音',
+      optionIds: rootCandidates,
+      optionLabels: rootCandidates.map(formatRootLabel),
+    };
+  }
+
+  if(singleChordId && (config.voicingMode ?? 'close-root') === 'close-random' && inversionOptionIds.length > 1){
+    return {
+      answerMode: 'inversion',
+      promptLabel: '转位',
+      optionIds: inversionOptionIds,
+      optionLabels: inversionOptionIds.map(getVoicingOptionLabel),
+    };
+  }
+
+  return {
+    answerMode: 'chord',
+    promptLabel: '和弦',
+    optionIds: [...safePool],
+    optionLabels: safePool.map(id => getChordDefinition(id).answerLabel),
+  };
 }
 
 export function getAvailableVoicingOptionIds(config = {}){
@@ -515,6 +596,11 @@ export function getAvailableVoicingOptionIds(config = {}){
       getAvailableInversions(definition.familyId, option.id).length > 0
     )))
     .map(option => option.id);
+}
+
+export function getAvailableRandomVoicingOptionIds(config = {}){
+  return getAvailableVoicingOptionIds(config)
+    .filter(optionId => optionId !== 'close-random');
 }
 
 export function formatRootLabel(root){
@@ -546,7 +632,7 @@ export function buildChordPool(config = {}){
     .filter(definition => (
       baseChordIds.includes(definition.familyId) &&
       tensionIds.includes(definition.tensionId) &&
-      getAvailableInversions(definition.familyId, voicingMode).length > 0
+      getAvailableInversions(definition.familyId, voicingMode, config.randomVoicingIds).length > 0
     ))
     .sort((left, right) => {
       const baseComparison = BASE_ORDER.indexOf(left.familyId) - BASE_ORDER.indexOf(right.familyId);
@@ -561,7 +647,11 @@ export function buildChordNotes(root, chordId, optionsOrBaseOctave = 3){
   const options = normalizeOptions(optionsOrBaseOctave);
   const rootSemitone = noteToSemitone(root);
   const baseMidi = ((options.baseOctave + 1) * 12) + rootSemitone;
-  const inversionChoices = getAvailableInversions(definition.familyId, options.voicingMode);
+  const inversionChoices = getAvailableInversions(
+    definition.familyId,
+    options.voicingMode,
+    options.randomVoicingIds,
+  );
   const safeInversionChoices = inversionChoices.length ? inversionChoices : [0];
   const inversion = pickFromList(safeInversionChoices, options.randomFn);
   const voicedIntervals = applyCloseVoicing(definition.intervals, inversion);
@@ -628,32 +718,56 @@ export function createQuestion({
   const chordPool = buildChordPool(config);
   const safePool = chordPool.length ? chordPool : buildChordPool();
   const voicingMode = config.voicingMode ?? 'close-root';
+  const answerContext = getAnswerModeContext({ config, rootMode, fixedRoot });
+  const rootCandidates = getRootCandidates(rootMode, fixedRoot, config.randomRootIds);
 
   let attempts = 0;
   let root = fixedRoot;
   let chordId = safePool[0];
-  let chord = buildChordNotes(root, chordId, { baseOctave, voicingMode, randomFn });
+  let chord = buildChordNotes(root, chordId, {
+    baseOctave,
+    voicingMode,
+    randomVoicingIds: config.randomVoicingIds,
+    randomFn,
+  });
   let signature = `${root}:${chordId}:${chord.inversion}`;
 
   do {
     root = rootMode === 'random'
-      ? pickFromList(CHROMATIC_ROOTS, randomFn)
+      ? pickFromList(rootCandidates, randomFn)
       : fixedRoot;
     chordId = pickFromList(safePool, randomFn);
-    chord = buildChordNotes(root, chordId, { baseOctave, voicingMode, randomFn });
+    chord = buildChordNotes(root, chordId, {
+      baseOctave,
+      voicingMode,
+      randomVoicingIds: config.randomVoicingIds,
+      randomFn,
+    });
     signature = `${root}:${chordId}:${chord.inversion}`;
     attempts++;
   } while(
     signature === previousSignature &&
     attempts < 16 &&
-    getQuestionVariantCount(safePool, rootMode, voicingMode) > 1
+    getQuestionVariantCount(safePool, rootMode, fixedRoot, config) > 1
   );
+
+  let correctOptionId = chordId;
+  if(answerContext.answerMode === 'root'){
+    correctOptionId = root;
+  }
+  if(answerContext.answerMode === 'inversion'){
+    correctOptionId = Object.entries(VOICING_ID_TO_INVERSION)
+      .find(([, inversion]) => inversion === chord.inversion)?.[0] ?? 'close-root';
+  }
 
   return {
     ...chord,
+    answerMode: answerContext.answerMode,
+    promptLabel: answerContext.promptLabel,
     rootMode,
     signature,
-    optionIds: [...safePool],
-    optionLabels: safePool.map(id => getChordDefinition(id).answerLabel),
+    correctOptionId,
+    optionIds: [...answerContext.optionIds],
+    optionLabels: [...answerContext.optionLabels],
   };
 }
