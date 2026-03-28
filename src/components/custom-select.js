@@ -12,6 +12,7 @@ export function createCustomSelect(id, groups, defaultValue){
 
   let currentValue = defaultValue || '';
   let currentLabel = '';
+  let isDisabled = false;
 
   groups.forEach(g => {
     if(g.label){
@@ -33,6 +34,7 @@ export function createCustomSelect(id, groups, defaultValue){
         currentLabel = label;
       }
       item.addEventListener('click', (e) => {
+        if(isDisabled) return;
         e.stopPropagation();
         currentValue = val;
         currentLabel = label;
@@ -51,6 +53,7 @@ export function createCustomSelect(id, groups, defaultValue){
   wrapper.appendChild(dropdown);
 
   display.addEventListener('click', (e) => {
+    if(isDisabled) return;
     e.stopPropagation();
     document.querySelectorAll('.custom-select.open').forEach(s => {
       if(s !== wrapper) s.classList.remove('open');
@@ -67,6 +70,16 @@ export function createCustomSelect(id, groups, defaultValue){
     if(item){ currentLabel = item.textContent; display.textContent = currentLabel; }
     dropdown.querySelectorAll('.cs-item').forEach(i => i.classList.toggle('active', i.dataset.value === val));
   };
+  wrapper.setDisabled = (nextDisabled) => {
+    isDisabled = Boolean(nextDisabled);
+    display.disabled = isDisabled;
+    wrapper.classList.toggle('is-disabled', isDisabled);
+    wrapper.setAttribute('aria-disabled', String(isDisabled));
+    if(isDisabled){
+      wrapper.classList.remove('open');
+    }
+  };
+  wrapper.isDisabled = () => isDisabled;
 
   return wrapper;
 }

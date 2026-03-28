@@ -3,10 +3,58 @@ import { NOTES, NOTE_NAMES_FLAT } from './music-theory.js';
 const SHARP_NAMES_ASCII = NOTES.map(note => note.replace('♯', '#'));
 const CHROMATIC_ROOTS = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
 const PLAYBACK_NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-const BASE_ORDER = ['major', 'dominant', 'minor', 'half-diminished', 'diminished'];
+const BASE_ORDER = [
+  'major-triad',
+  'minor-triad',
+  'diminished-triad',
+  'augmented-triad',
+  'major-six',
+  'minor-six',
+  'major',
+  'dominant',
+  'minor',
+  'half-diminished',
+  'diminished',
+];
 const TENSION_ORDER = ['none', 'b9', '9', '#9', '11', '#11', 'b13', '13'];
 
 export const BASE_CHORD_TYPES = [
+  {
+    id: 'major-triad',
+    label: 'Maj',
+    shortLabel: 'maj',
+    description: 'Major triad base chord.',
+  },
+  {
+    id: 'minor-triad',
+    label: 'm',
+    shortLabel: 'm',
+    description: 'Minor triad base chord.',
+  },
+  {
+    id: 'diminished-triad',
+    label: 'dim',
+    shortLabel: 'dim',
+    description: 'Diminished triad base chord.',
+  },
+  {
+    id: 'augmented-triad',
+    label: 'aug',
+    shortLabel: 'aug',
+    description: 'Augmented triad base chord.',
+  },
+  {
+    id: 'major-six',
+    label: '6',
+    shortLabel: '6',
+    description: 'Major-six base chord.',
+  },
+  {
+    id: 'minor-six',
+    label: 'm6',
+    shortLabel: 'm6',
+    description: 'Minor-six base chord.',
+  },
   {
     id: 'major',
     label: 'Maj7',
@@ -50,7 +98,89 @@ export const TENSION_OPTIONS = [
   { id: '13', label: '13', description: 'Natural thirteenth tension.' },
 ];
 
+export const VOICING_OPTIONS = [
+  {
+    id: 'close-root',
+    label: '封闭原位',
+    description: 'Closed position with the root in the bass.',
+  },
+  {
+    id: 'close-first',
+    label: '封闭一转位',
+    description: 'Closed position with the first inversion in the bass.',
+  },
+  {
+    id: 'close-second',
+    label: '封闭二转位',
+    description: 'Closed position with the second inversion in the bass.',
+  },
+  {
+    id: 'close-third',
+    label: '封闭三转位',
+    description: 'Closed position with the third inversion in the bass.',
+  },
+  {
+    id: 'close-random',
+    label: '封闭随机转位',
+    description: 'Closed position with the inversion chosen randomly each time.',
+  },
+];
+
 const FAMILY_CONFIG = {
+  'major-triad': {
+    baseId: 'maj',
+    shellIntervals: [0, 4, 7],
+    supportedTensions: ['none', '9', '#11'],
+    descriptions: {
+      none: 'The plain major triad, clean and direct.',
+      '9': 'Major triad color with an added ninth on top.',
+      '#11': 'Major triad color with a brighter added sharp-eleven.',
+    },
+  },
+  'minor-triad': {
+    baseId: 'm',
+    shellIntervals: [0, 3, 7],
+    supportedTensions: ['none', '9', '11'],
+    descriptions: {
+      none: 'The plain minor triad before any upper color is added.',
+      '9': 'Minor triad color with an added ninth.',
+      '11': 'Minor triad color with an added eleventh.',
+    },
+  },
+  'diminished-triad': {
+    baseId: 'dim',
+    shellIntervals: [0, 3, 6],
+    supportedTensions: ['none'],
+    descriptions: {
+      none: 'Compact diminished triad color.',
+    },
+  },
+  'augmented-triad': {
+    baseId: 'aug',
+    shellIntervals: [0, 4, 8],
+    supportedTensions: ['none'],
+    descriptions: {
+      none: 'Bright augmented triad color with a raised fifth.',
+    },
+  },
+  'major-six': {
+    baseId: '6',
+    shellIntervals: [0, 4, 7, 9],
+    supportedTensions: ['none', '9'],
+    descriptions: {
+      none: 'A major triad opened up by the sixth.',
+      '9': 'The classic 6/9 color without adding a seventh.',
+    },
+  },
+  'minor-six': {
+    baseId: 'm6',
+    shellIntervals: [0, 3, 7, 9],
+    supportedTensions: ['none', '9'],
+    descriptions: {
+      none: 'Minor color with the sixth added on top.',
+      '9': 'Minor-six color widened into a m6/9 sonority.',
+    },
+  },
   major: {
     baseId: 'maj7',
     shellIntervals: [0, 4, 7, 11],
@@ -118,12 +248,41 @@ const TENSION_INTERVALS = {
 
 export const TRAINING_TEMPLATES = [
   {
+    id: 'basic-core-chords',
+    label: 'Basic Core Chords',
+    description: 'Start from triads, sixth chords, and core seventh colors.',
+    baseChordIds: [
+      'major-triad',
+      'minor-triad',
+      'diminished-triad',
+      'augmented-triad',
+      'major-six',
+      'minor-six',
+      'major',
+      'dominant',
+      'minor',
+    ],
+    tensionIds: ['none'],
+    playbackMode: 'chord',
+    voicingMode: 'close-root',
+  },
+  {
     id: 'basic-sevenths',
     label: 'Basic Seventh Chords',
-    description: 'Start from core seventh-chord colors only.',
+    description: 'Focus on core seventh-chord colors only.',
     baseChordIds: ['major', 'dominant', 'minor', 'half-diminished', 'diminished'],
     tensionIds: ['none'],
     playbackMode: 'chord',
+    voicingMode: 'close-root',
+  },
+  {
+    id: 'triads-and-sixths',
+    label: 'Triads and Sixths',
+    description: 'Drill plain triads, six chords, and a small set of common add colors.',
+    baseChordIds: ['major-triad', 'minor-triad', 'diminished-triad', 'augmented-triad', 'major-six', 'minor-six'],
+    tensionIds: ['none', '9', '#11', '11'],
+    playbackMode: 'chord',
+    voicingMode: 'close-root',
   },
   {
     id: 'minor-tensions',
@@ -132,6 +291,7 @@ export const TRAINING_TEMPLATES = [
     baseChordIds: ['minor'],
     tensionIds: ['none', '9', '11', '13'],
     playbackMode: 'chord',
+    voicingMode: 'close-root',
   },
   {
     id: 'dorian-minor-tensions',
@@ -140,6 +300,7 @@ export const TRAINING_TEMPLATES = [
     baseChordIds: ['minor'],
     tensionIds: ['none', '9', '11', '13'],
     playbackMode: 'chord',
+    voicingMode: 'close-root',
   },
   {
     id: 'dominant-tensions',
@@ -148,6 +309,7 @@ export const TRAINING_TEMPLATES = [
     baseChordIds: ['dominant'],
     tensionIds: ['none', 'b9', '9', '#9', '#11', 'b13', '13'],
     playbackMode: 'chord',
+    voicingMode: 'close-root',
   },
 ];
 
@@ -191,6 +353,24 @@ function buildChordId(familyId, tensionId){
     return family.baseId;
   }
 
+  if(familyId === 'major-triad'){
+    if(tensionId === '9') return 'add9';
+    if(tensionId === '#11') return 'add#11';
+  }
+
+  if(familyId === 'minor-triad'){
+    if(tensionId === '9') return 'm(add9)';
+    if(tensionId === '11') return 'm(add11)';
+  }
+
+  if(familyId === 'major-six'){
+    if(tensionId === '9') return '6/9';
+  }
+
+  if(familyId === 'minor-six'){
+    if(tensionId === '9') return 'm6/9';
+  }
+
   if(familyId === 'major'){
     if(tensionId === '9') return 'maj9';
     if(tensionId === '#11') return 'maj7#11';
@@ -199,8 +379,8 @@ function buildChordId(familyId, tensionId){
 
   if(familyId === 'dominant'){
     if(tensionId === '9') return '9';
-    if(tensionId === '13') return '13';
     if(tensionId === '11') return '11';
+    if(tensionId === '13') return '13';
     return `7${tensionId}`;
   }
 
@@ -214,14 +394,9 @@ function buildChordId(familyId, tensionId){
 }
 
 function buildSymbol(familyId, tensionId){
-  const chordId = buildChordId(familyId, tensionId);
-  return chordId
+  return buildChordId(familyId, tensionId)
     .replace(/b/g, '♭')
     .replace(/#/g, '♯');
-}
-
-function buildAnswerLabel(familyId, tensionId){
-  return buildSymbol(familyId, tensionId);
 }
 
 function buildDefinition(familyId, tensionId){
@@ -233,7 +408,7 @@ function buildDefinition(familyId, tensionId){
     familyId,
     tensionId,
     shortLabel: buildSymbol(familyId, tensionId),
-    answerLabel: buildAnswerLabel(familyId, tensionId),
+    answerLabel: buildSymbol(familyId, tensionId),
     symbol: buildSymbol(familyId, tensionId),
     intervals: [...family.shellIntervals, ...tensionIntervals],
     tensions: tensionId === 'none' ? [] : [tensionId.replace(/b/g, '♭').replace(/#/g, '♯')],
@@ -241,16 +416,105 @@ function buildDefinition(familyId, tensionId){
   };
 }
 
-const CHORD_DEFINITIONS = BASE_ORDER.flatMap(familyId => {
-  const family = FAMILY_CONFIG[familyId];
-  return family.supportedTensions.map(tensionId => buildDefinition(familyId, tensionId));
-});
+const CHORD_DEFINITIONS = BASE_ORDER.flatMap(familyId => (
+  FAMILY_CONFIG[familyId].supportedTensions.map(tensionId => buildDefinition(familyId, tensionId))
+));
 
 function getSelectedIds(selectedIds, fallbackIds){
   if(Array.isArray(selectedIds) && selectedIds.length){
     return [...selectedIds];
   }
   return [...fallbackIds];
+}
+
+function normalizeOptions(optionsOrBaseOctave){
+  if(typeof optionsOrBaseOctave === 'number'){
+    return {
+      baseOctave: optionsOrBaseOctave,
+      voicingMode: 'close-root',
+      randomFn: Math.random,
+    };
+  }
+
+  return {
+    baseOctave: optionsOrBaseOctave?.baseOctave ?? 3,
+    voicingMode: optionsOrBaseOctave?.voicingMode ?? 'close-root',
+    randomFn: optionsOrBaseOctave?.randomFn ?? Math.random,
+  };
+}
+
+function getInversionLabel(inversion){
+  if(inversion === 0) return '原位';
+  const names = ['一', '二', '三', '四', '五'];
+  const prefix = names[inversion - 1] ?? String(inversion);
+  return `${prefix}转位`;
+}
+
+function getMaxInversion(familyId){
+  return Math.max(FAMILY_CONFIG[familyId].shellIntervals.length - 1, 0);
+}
+
+function getAvailableInversions(familyId, voicingMode){
+  const maxInversion = getMaxInversion(familyId);
+
+  if(voicingMode === 'close-random'){
+    return Array.from({ length: maxInversion + 1 }, (_, index) => index);
+  }
+
+  if(voicingMode === 'close-root'){
+    return [0];
+  }
+
+  if(voicingMode === 'close-first'){
+    return maxInversion >= 1 ? [1] : [];
+  }
+
+  if(voicingMode === 'close-second'){
+    return maxInversion >= 2 ? [2] : [];
+  }
+
+  if(voicingMode === 'close-third'){
+    return maxInversion >= 3 ? [3] : [];
+  }
+
+  return [0];
+}
+
+function applyCloseVoicing(intervals, inversion){
+  return intervals
+    .slice(inversion)
+    .concat(intervals.slice(0, inversion).map(interval => interval + 12));
+}
+
+function getVoicingLabel(inversion){
+  return `封闭${getInversionLabel(inversion)}`;
+}
+
+function getVoicingVariantCount(chordId, voicingMode){
+  const definition = getChordDefinition(chordId);
+  return getAvailableInversions(definition.familyId, voicingMode).length;
+}
+
+function getQuestionVariantCount(chordPool, rootMode, voicingMode){
+  const rootCount = rootMode === 'random' ? CHROMATIC_ROOTS.length : 1;
+  const voicingCount = chordPool.reduce(
+    (total, chordId) => total + getVoicingVariantCount(chordId, voicingMode),
+    0,
+  );
+  return rootCount * voicingCount;
+}
+
+export function getAvailableVoicingOptionIds(config = {}){
+  const baseChordIds = getSelectedIds(config.baseChordIds, ['major-triad', 'minor-triad', 'major', 'dominant', 'minor']);
+  const tensionIds = getSelectedIds(config.tensionIds, ['none']);
+
+  return VOICING_OPTIONS
+    .filter(option => CHORD_DEFINITIONS.some(definition => (
+      baseChordIds.includes(definition.familyId) &&
+      tensionIds.includes(definition.tensionId) &&
+      getAvailableInversions(definition.familyId, option.id).length > 0
+    )))
+    .map(option => option.id);
 }
 
 export function formatRootLabel(root){
@@ -274,13 +538,15 @@ export function getTrainingTemplate(templateId){
 }
 
 export function buildChordPool(config = {}){
-  const baseChordIds = getSelectedIds(config.baseChordIds, ['major', 'dominant', 'minor']);
+  const baseChordIds = getSelectedIds(config.baseChordIds, ['major-triad', 'minor-triad', 'major', 'dominant', 'minor']);
   const tensionIds = getSelectedIds(config.tensionIds, ['none']);
+  const voicingMode = config.voicingMode ?? 'close-root';
 
   return CHORD_DEFINITIONS
     .filter(definition => (
       baseChordIds.includes(definition.familyId) &&
-      tensionIds.includes(definition.tensionId)
+      tensionIds.includes(definition.tensionId) &&
+      getAvailableInversions(definition.familyId, voicingMode).length > 0
     ))
     .sort((left, right) => {
       const baseComparison = BASE_ORDER.indexOf(left.familyId) - BASE_ORDER.indexOf(right.familyId);
@@ -290,11 +556,16 @@ export function buildChordPool(config = {}){
     .map(definition => definition.id);
 }
 
-export function buildChordNotes(root, chordId, baseOctave = 3){
+export function buildChordNotes(root, chordId, optionsOrBaseOctave = 3){
   const definition = getChordDefinition(chordId);
+  const options = normalizeOptions(optionsOrBaseOctave);
   const rootSemitone = noteToSemitone(root);
-  const baseMidi = ((baseOctave + 1) * 12) + rootSemitone;
-  const midiNotes = definition.intervals.map(interval => baseMidi + interval);
+  const baseMidi = ((options.baseOctave + 1) * 12) + rootSemitone;
+  const inversionChoices = getAvailableInversions(definition.familyId, options.voicingMode);
+  const safeInversionChoices = inversionChoices.length ? inversionChoices : [0];
+  const inversion = pickFromList(safeInversionChoices, options.randomFn);
+  const voicedIntervals = applyCloseVoicing(definition.intervals, inversion);
+  const midiNotes = voicedIntervals.map(interval => baseMidi + interval);
 
   return {
     root,
@@ -302,6 +573,10 @@ export function buildChordNotes(root, chordId, baseOctave = 3){
     chordId,
     label: `${formatRootLabel(root)}${definition.symbol}`,
     definition,
+    inversion,
+    inversionLabel: getInversionLabel(inversion),
+    voicingMode: options.voicingMode,
+    voicingLabel: getVoicingLabel(inversion),
     noteLabels: midiNotes.map(midi => semitoneToDisplayNote(midi % 12)),
     audioNotes: midiNotes.map(midiToPlaybackNoteName),
   };
@@ -352,22 +627,27 @@ export function createQuestion({
 }){
   const chordPool = buildChordPool(config);
   const safePool = chordPool.length ? chordPool : buildChordPool();
+  const voicingMode = config.voicingMode ?? 'close-root';
 
   let attempts = 0;
   let root = fixedRoot;
   let chordId = safePool[0];
-  let signature = `${root}:${chordId}`;
+  let chord = buildChordNotes(root, chordId, { baseOctave, voicingMode, randomFn });
+  let signature = `${root}:${chordId}:${chord.inversion}`;
 
   do {
     root = rootMode === 'random'
       ? pickFromList(CHROMATIC_ROOTS, randomFn)
       : fixedRoot;
     chordId = pickFromList(safePool, randomFn);
-    signature = `${root}:${chordId}`;
+    chord = buildChordNotes(root, chordId, { baseOctave, voicingMode, randomFn });
+    signature = `${root}:${chordId}:${chord.inversion}`;
     attempts++;
-  } while(signature === previousSignature && attempts < 16 && safePool.length * CHROMATIC_ROOTS.length > 1);
-
-  const chord = buildChordNotes(root, chordId, baseOctave);
+  } while(
+    signature === previousSignature &&
+    attempts < 16 &&
+    getQuestionVariantCount(safePool, rootMode, voicingMode) > 1
+  );
 
   return {
     ...chord,

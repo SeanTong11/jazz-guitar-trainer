@@ -4,10 +4,12 @@ import {
   BASE_CHORD_TYPES,
   TENSION_OPTIONS,
   TRAINING_TEMPLATES,
+  VOICING_OPTIONS,
   buildChordPool,
   buildPlaybackEvents,
   createQuestion,
   EAR_TRAINING_ROOTS,
+  getAvailableVoicingOptionIds,
   getChordDefinition,
 } from '../core/chord-ear-training.js';
 
@@ -17,12 +19,16 @@ const PLAYBACK_MODE_LABELS = {
   arpeggio: '琶音',
   both: '先琶音后和弦',
 };
+const VOICING_MODE_LABELS = Object.fromEntries(
+  VOICING_OPTIONS.map(option => [option.id, option.label]),
+);
 
 function cloneTemplateConfig(template){
   return {
     baseChordIds: [...template.baseChordIds],
     tensionIds: [...template.tensionIds],
     playbackMode: template.playbackMode,
+    voicingMode: template.voicingMode ?? 'close-root',
   };
 }
 
@@ -63,11 +69,11 @@ function buildRootGroups(){
   }];
 }
 
-function renderQuestionPrompt(questionNumber, playbackMode, optionCount){
+function renderQuestionPrompt(questionNumber, playbackMode, voicingMode, optionCount){
   return `
     <div class="ear-prompt">
       <span class="ear-prompt-kicker">
-        Question ${questionNumber} · ${PLAYBACK_MODE_LABELS[playbackMode]} · ${optionCount} Options
+        Question ${questionNumber} · ${PLAYBACK_MODE_LABELS[playbackMode]} · ${VOICING_MODE_LABELS[voicingMode]} · ${optionCount} Options
       </span>
       <strong>Listen</strong>
       <p>Identify the chord quality from the current configuration.</p>
@@ -92,8 +98,9 @@ function renderFeedbackMarkup(question, isCorrect){
       <div class="ear-feedback-meta">
         <span><b>Notes:</b> ${question.noteLabels.join(' · ')}</span>
         <span><b>Tensions:</b> ${tensionText}</span>
+        <span><b>Voicing:</b> ${question.voicingLabel}</span>
       </div>
-      <div class="ear-feedback-context">${PLAYBACK_MODE_LABELS[question.playbackMode]} playback</div>
+      <div class="ear-feedback-context">${PLAYBACK_MODE_LABELS[question.playbackMode]} playback · ${question.voicingLabel}</div>
     </div>
   `;
 }
@@ -119,13 +126,13 @@ export function initEarTraining(){
   container.innerHTML = `
     <div class="card">
       <h2>和弦练耳</h2>
-      <p class="module-intro">模板只是起点，核心是自己配置 base chord、单个 tension 和播放方式。</p>
+      <p class="module-intro">模板只是起点，核心是自己配置 base chord、单个 tension、播放方式，以及封闭排列下的指定转位。</p>
       <div class="ear-config-panel">
         <div class="controls ear-controls" id="et-controls"></div>
         <div class="ear-chip-section">
           <div class="ear-section-head">
             <h3>Base Chords</h3>
-            <span>先决定题库里的和弦家族</span>
+            <span>三和弦、6 和弦、7 和弦都可以进题库</span>
           </div>
           <div class="choice-chip-grid" id="et-base-grid"></div>
         </div>
@@ -141,6 +148,7 @@ export function initEarTraining(){
       <div class="controls ear-action-controls">
         <button class="btn btn-primary" id="et-start">开始训练</button>
         <button class="btn btn-secondary" id="et-replay">重播</button>
+        <button class="btn btn-secondary" id="et-replay-arpeggio">重播琶音</button>
         <button class="btn btn-secondary" id="et-next">下一题</button>
       </div>
       <div class="stats">
@@ -150,7 +158,7 @@ export function initEarTraining(){
         <span>已答: <b class="num" id="et-attempted">0</b></span>
       </div>
       <div class="question-display ear-question-display" id="et-question">
-        ${renderQuestionPrompt(1, state.config.playbackMode, buildChordPool(state.config).length)}
+        ${renderQuestionPrompt(1, state.config.playbackMode, state.config.voicingMode, buildChordPool(state.config).length)}
       </div>
       <div class="options-grid ear-options-grid" id="et-options"></div>
       <div class="ear-feedback-shell" id="et-feedback">
@@ -192,6 +200,18 @@ export function initEarTraining(){
   `;
   controls.appendChild(playbackToggle);
 
+  const voicingToggle = document.createElement('div');
+  voicingToggle.className = 'degree-toggle degree-toggle-wide';
+  voicingToggle.id = 'et-voicing-mode';
+  voicingToggle.innerHTML = `
+    <button class="active" data-voicing="close-root">原位</button>
+    <button data-voicing="close-first">一转</button>
+    <button data-voicing="close-second">二转</button>
+    <button data-voicing="close-third">三转</button>
+    <button data-voicing="close-random">随机</button>
+  `;
+  controls.appendChild(voicingToggle);
+
   const autoNextToggle = document.createElement('div');
   autoNextToggle.className = 'degree-toggle';
   autoNextToggle.id = 'et-auto-next';
@@ -203,6 +223,7 @@ export function initEarTraining(){
 
   const startButton = document.getElementById('et-start');
   const replayButton = document.getElementById('et-replay');
+  const replayArpeggioButton = document.getElementById('et-replay-arpeggio');
   const nextButton = document.getElementById('et-next');
 
   function clearNextTimer(){
@@ -214,6 +235,17 @@ export function initEarTraining(){
 
   function getCurrentPool(){
     return buildChordPool(state.config);
+  }
+
+  function normalizeConfig(nextConfig){
+    const availableVoicingIds = getAvailableVoicingOptionIds(nextConfig);
+    const fallbackVoicingId = availableVoicingIds[0] ?? 'close-root';
+    return {
+      ...nextConfig,
+      voicingMode: availableVoicingIds.includes(nextConfig.voicingMode)
+        ? nextConfig.voicingMode
+        : fallbackVoicingId,
+    };
   }
 
   function setTemplateSelection(templateId){
@@ -237,22 +269,42 @@ export function initEarTraining(){
 
   function updatePreview(){
     const pool = getCurrentPool();
+    rootSelect.setDisabled(state.rootMode === 'random');
+    startButton.disabled = pool.length === 0;
+
+    if(!pool.length){
+      previewEl.innerHTML = `
+        <div class="ear-preview-head">
+          <strong>Current Pool</strong>
+          <span>0 chords · ${PLAYBACK_MODE_LABELS[state.config.playbackMode]} · ${VOICING_MODE_LABELS[state.config.voicingMode]}</span>
+        </div>
+        <div class="ear-preview-empty">当前选择没有生成出有效题目，请至少保留一个兼容的 base chord + tension 组合。</div>
+      `;
+      return;
+    }
+
     const labels = pool.map(chordId => getChordDefinition(chordId).answerLabel);
     previewEl.innerHTML = `
       <div class="ear-preview-head">
         <strong>Current Pool</strong>
-        <span>${pool.length} chords · ${PLAYBACK_MODE_LABELS[state.config.playbackMode]}</span>
+        <span>${pool.length} chords · ${PLAYBACK_MODE_LABELS[state.config.playbackMode]} · ${VOICING_MODE_LABELS[state.config.voicingMode]}</span>
       </div>
       <div class="ear-preview-list">${labels.join(' · ')}</div>
     `;
-    rootSelect.classList.toggle('is-disabled', state.rootMode === 'random');
   }
 
   function renderConfigChips(){
+    const availableVoicingIds = getAvailableVoicingOptionIds(state.config);
     baseGrid.innerHTML = renderChipButtons(BASE_CHORD_TYPES, state.config.baseChordIds, 'base');
     extGrid.innerHTML = renderChipButtons(TENSION_OPTIONS, state.config.tensionIds, 'tension');
     playbackToggle.querySelectorAll('button').forEach(button => {
       button.classList.toggle('active', button.dataset.playback === state.config.playbackMode);
+    });
+    voicingToggle.querySelectorAll('button').forEach(button => {
+      const isAvailable = availableVoicingIds.includes(button.dataset.voicing);
+      button.disabled = !isAvailable;
+      button.classList.toggle('is-disabled', !isAvailable);
+      button.classList.toggle('active', button.dataset.voicing === state.config.voicingMode);
     });
     updatePreview();
   }
@@ -273,18 +325,34 @@ export function initEarTraining(){
 
   function renderQuestion(question){
     questionEl.innerHTML = renderQuestionPrompt(
-      state.attempted + 1,
-      state.config.playbackMode,
-      question.optionIds.length,
-    );
+        state.attempted + 1,
+        state.config.playbackMode,
+        question.voicingMode,
+        question.optionIds.length,
+      );
     feedbackEl.innerHTML = '<div class="ear-feedback-placeholder">先听，再选。</div>';
     renderOptions(question);
   }
 
-  async function playCurrentQuestion(){
+  async function playCurrentQuestion(playbackMode = state.config.playbackMode){
     if(!state.currentQuestion) return;
-    const events = buildPlaybackEvents(state.currentQuestion.audioNotes, state.config.playbackMode);
+    const events = buildPlaybackEvents(state.currentQuestion.audioNotes, playbackMode);
     await playPlaybackEvents(events);
+  }
+
+  function showEmptyPoolState(){
+    clearNextTimer();
+    state.active = false;
+    state.answered = false;
+    state.currentQuestion = null;
+    questionEl.innerHTML = renderQuestionPrompt(
+      1,
+      state.config.playbackMode,
+      state.config.voicingMode,
+      0,
+    );
+    optionsEl.innerHTML = '';
+    feedbackEl.innerHTML = '<div class="ear-feedback-placeholder">当前配置没有可用题目，请先调整题库。</div>';
   }
 
   async function loadNextQuestion(){
@@ -302,6 +370,10 @@ export function initEarTraining(){
   }
 
   async function startSession(){
+    if(!getCurrentPool().length){
+      showEmptyPoolState();
+      return;
+    }
     clearNextTimer();
     state.active = true;
     state.answered = false;
@@ -360,11 +432,22 @@ export function initEarTraining(){
   }
 
   function restartIfActive(){
+    if(!getCurrentPool().length){
+      updatePreview();
+      showEmptyPoolState();
+      return;
+    }
+
     if(state.active){
       startSession();
     } else {
       updatePreview();
-      questionEl.innerHTML = renderQuestionPrompt(1, state.config.playbackMode, getCurrentPool().length);
+      questionEl.innerHTML = renderQuestionPrompt(
+        1,
+        state.config.playbackMode,
+        state.config.voicingMode,
+        getCurrentPool().length,
+      );
     }
   }
 
@@ -379,14 +462,14 @@ export function initEarTraining(){
   function applyTemplate(templateId){
     const template = TRAINING_TEMPLATES.find(item => item.id === templateId);
     if(!template) return;
-    state.config = cloneTemplateConfig(template);
+    state.config = normalizeConfig(cloneTemplateConfig(template));
     setTemplateSelection(template.id);
     renderConfigChips();
     restartIfActive();
   }
 
   function handleConfigMutation(updater){
-    state.config = updater(state.config);
+    state.config = normalizeConfig(updater(state.config));
     markAsCustom();
     renderConfigChips();
     restartIfActive();
@@ -398,6 +481,10 @@ export function initEarTraining(){
 
   replayButton.addEventListener('click', () => {
     playCurrentQuestion();
+  });
+
+  replayArpeggioButton.addEventListener('click', () => {
+    playCurrentQuestion('arpeggio');
   });
 
   nextButton.addEventListener('click', () => {
@@ -437,6 +524,15 @@ export function initEarTraining(){
     handleConfigMutation(config => ({
       ...config,
       playbackMode: toggleButton.dataset.playback,
+    }));
+  });
+
+  voicingToggle.addEventListener('click', event => {
+    const toggleButton = event.target.closest('button[data-voicing]');
+    if(!toggleButton || toggleButton.disabled) return;
+    handleConfigMutation(config => ({
+      ...config,
+      voicingMode: toggleButton.dataset.voicing,
     }));
   });
 

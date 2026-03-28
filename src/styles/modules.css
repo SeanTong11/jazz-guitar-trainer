@@ -66,6 +66,12 @@ select optgroup { font-weight: 600; color: var(--text-muted); }
   color: var(--primary);
 }
 .btn-danger { background: var(--danger); color: #fff; border-color: rgba(0,0,0,0.08); }
+.btn:disabled {
+  opacity: 0.58;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
 .opt-btn {
   background: var(--card-bg);
   color: var(--text);
@@ -203,6 +209,17 @@ select optgroup { font-weight: 600; color: var(--text-muted); }
   background: var(--primary);
   color: #fff;
 }
+.degree-toggle button:disabled,
+.degree-toggle button.is-disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+  color: var(--text-light);
+}
+.degree-toggle button.active:disabled,
+.degree-toggle button.active.is-disabled {
+  background: rgba(124,58,237,0.2);
+  color: rgba(255,255,255,0.92);
+}
 .degree-toggle button:not(:last-child) {
   border-right: 1px solid var(--clay-border);
 }
@@ -311,6 +328,11 @@ select optgroup { font-weight: 600; color: var(--text-muted); }
   font-size: 0.82rem;
   line-height: 1.6;
 }
+.ear-preview-empty {
+  color: var(--text-muted);
+  font-size: 0.84rem;
+  line-height: 1.6;
+}
 .degree-toggle-wide button:last-child {
   min-width: 120px;
 }
@@ -414,6 +436,9 @@ select optgroup { font-weight: 600; color: var(--text-muted); }
 }
 .custom-select.is-disabled {
   opacity: 0.55;
+}
+.custom-select.is-disabled .cs-display {
+  cursor: default;
 }
 @media (max-width: 640px) {
   .question-display { font-size: 2.5rem; padding: 24px; }

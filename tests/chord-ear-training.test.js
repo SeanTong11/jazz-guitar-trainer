@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  BASE_CHORD_TYPES,
+  VOICING_OPTIONS,
   buildChordNotes,
   buildChordPool,
   buildPlaybackEvents,
@@ -24,22 +26,58 @@ test('tension options expose single-tension choices including none and alteratio
   );
 });
 
-test('buildChordPool combines selected base chords and single tensions', () => {
+test('base chord options include triads, sixths, and seventh families', () => {
+  assert.deepEqual(
+    BASE_CHORD_TYPES.map(option => option.id),
+    [
+      'major-triad',
+      'minor-triad',
+      'diminished-triad',
+      'augmented-triad',
+      'major-six',
+      'minor-six',
+      'major',
+      'dominant',
+      'minor',
+      'half-diminished',
+      'diminished',
+    ],
+  );
+});
+
+test('voicing options cover explicit closed-position inversion choices', () => {
+  assert.deepEqual(
+    VOICING_OPTIONS.map(option => option.id),
+    ['close-root', 'close-first', 'close-second', 'close-third', 'close-random'],
+  );
+});
+
+test('buildChordPool combines triads, sixth chords, and supported single tensions', () => {
   const pool = buildChordPool({
-    baseChordIds: ['major', 'dominant'],
-    tensionIds: ['none', '9', '13'],
+    baseChordIds: ['major-triad', 'major-six', 'minor-six'],
+    tensionIds: ['none', '9', '#11'],
   });
 
-  assert.deepEqual(pool, ['maj7', 'maj9', 'maj13', '7', '9', '13']);
+  assert.deepEqual(pool, ['maj', 'add9', 'add#11', '6', '6/9', 'm6', 'm6/9']);
 });
 
 test('buildChordPool filters out unsupported tension combinations', () => {
   const pool = buildChordPool({
-    baseChordIds: ['major', 'half-diminished', 'diminished'],
+    baseChordIds: ['augmented-triad', 'diminished-triad', 'major'],
     tensionIds: ['none', '#11', 'b9'],
   });
 
-  assert.deepEqual(pool, ['maj7', 'maj7#11', 'm7b5', 'dim7']);
+  assert.deepEqual(pool, ['dim', 'aug', 'maj7', 'maj7#11']);
+});
+
+test('buildChordPool filters out chords that cannot support the selected inversion', () => {
+  const pool = buildChordPool({
+    baseChordIds: ['major-triad', 'minor-triad', 'dominant'],
+    tensionIds: ['none'],
+    voicingMode: 'close-third',
+  });
+
+  assert.deepEqual(pool, ['7']);
 });
 
 test('buildChordNotes returns expected label and notes for major sharp eleven', () => {
@@ -57,11 +95,38 @@ test('buildChordNotes returns expected label and notes for dominant flat nine', 
   assert.deepEqual(chord.noteLabels, ['C', 'E', 'G', 'B♭', 'D♭']);
 });
 
+test('buildChordNotes can generate explicit first inversion voicings for triads', () => {
+  const chord = buildChordNotes('C', 'maj', {
+    baseOctave: 3,
+    voicingMode: 'close-first',
+  });
+
+  assert.equal(chord.label, 'Cmaj');
+  assert.equal(chord.inversion, 1);
+  assert.equal(chord.voicingLabel, '封闭一转位');
+  assert.deepEqual(chord.noteLabels, ['E', 'G', 'C']);
+  assert.deepEqual(chord.audioNotes, ['E3', 'G3', 'C4']);
+});
+
+test('buildChordNotes can generate explicit third inversion voicings for seventh chords', () => {
+  const chord = buildChordNotes('C', '7', {
+    baseOctave: 3,
+    voicingMode: 'close-third',
+  });
+
+  assert.equal(chord.label, 'C7');
+  assert.equal(chord.inversion, 3);
+  assert.equal(chord.voicingLabel, '封闭三转位');
+  assert.deepEqual(chord.noteLabels, ['B♭', 'C', 'E', 'G']);
+  assert.deepEqual(chord.audioNotes, ['A#3', 'C4', 'E4', 'G4']);
+});
+
 test('createQuestion uses selected chord pool as answer options', () => {
   const question = createQuestion({
     config: {
       baseChordIds: ['dominant'],
       tensionIds: ['none', 'b9', '9', '#9'],
+      voicingMode: 'close-root',
     },
     rootMode: 'fixed',
     fixedRoot: 'D',
@@ -70,8 +135,9 @@ test('createQuestion uses selected chord pool as answer options', () => {
 
   assert.equal(question.root, 'D');
   assert.equal(question.chordId, '7');
+  assert.equal(question.voicingLabel, '封闭原位');
   assert.deepEqual(question.optionLabels, ['7', '7♭9', '9', '7♯9']);
-  assert.equal(question.signature, 'D:7');
+  assert.equal(question.signature, 'D:7:0');
 });
 
 test('buildPlaybackEvents supports chord, arpeggio, and both modes', () => {
@@ -97,13 +163,23 @@ test('buildPlaybackEvents supports chord, arpeggio, and both modes', () => {
   ]);
 });
 
-test('training template captures single-tension dominant setup', () => {
+test('training template exposes triads-and-sixths entry points alongside dominant tensions', () => {
+  const coreTemplate = TRAINING_TEMPLATES.find(item => item.id === 'basic-core-chords');
   const template = TRAINING_TEMPLATES.find(item => item.id === 'dominant-tensions');
+
+  assert.ok(coreTemplate);
+  assert.deepEqual(
+    coreTemplate.baseChordIds,
+    ['major-triad', 'minor-triad', 'diminished-triad', 'augmented-triad', 'major-six', 'minor-six', 'major', 'dominant', 'minor'],
+  );
+  assert.deepEqual(coreTemplate.tensionIds, ['none']);
+  assert.equal(coreTemplate.voicingMode, 'close-root');
 
   assert.ok(template);
   assert.deepEqual(template.baseChordIds, ['dominant']);
   assert.deepEqual(template.tensionIds, ['none', 'b9', '9', '#9', '#11', 'b13', '13']);
   assert.equal(template.playbackMode, 'chord');
+  assert.equal(template.voicingMode, 'close-root');
 });
 
 test('getChordDefinition throws for unknown ids', () => {
