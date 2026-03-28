@@ -3,6 +3,7 @@ import './styles/modules.css';
 import { initNoteDegree } from './modules/note-degree.js';
 import { initFretboard } from './modules/fretboard.js';
 import { initChordDiagrams } from './modules/chord-diagrams.js';
+import { initEarTraining } from './modules/ear-training.js';
 
 document.getElementById('mainNav').addEventListener('click', e => {
   const btn = e.target.closest('.nav-btn');
@@ -16,3 +17,4 @@ document.getElementById('mainNav').addEventListener('click', e => {
 initNoteDegree();
 initFretboard();
 initChordDiagrams();
+initEarTraining();

@@ -29,6 +29,16 @@ export function getPolySynth(){
   return polySynth;
 }
 
+export async function playChord(noteNames, options = {}){
+  await ensureStarted();
+  const instrument = getPolySynth();
+  const duration = options.duration ?? 1.3;
+  const when = Tone.now() + (options.delay ?? 0);
+
+  instrument.releaseAll();
+  instrument.triggerAttackRelease(noteNames, duration, when);
+}
+
 export function getMembraneSynth(){
   if(!membraneSynth) membraneSynth = new Tone.MembraneSynth({
     pitchDecay:0.01,octaves:4,envelope:{attack:0.001,decay:0.1,sustain:0,release:0.1}
