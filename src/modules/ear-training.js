@@ -2,7 +2,7 @@ import { createCustomSelect } from '../components/custom-select.js';
 import { playPlaybackEvents } from '../core/audio-engine.js';
 import {
   BASE_CHORD_TYPES,
-  EXTENSION_OPTIONS,
+  TENSION_OPTIONS,
   TRAINING_TEMPLATES,
   buildChordPool,
   buildPlaybackEvents,
@@ -21,7 +21,7 @@ const PLAYBACK_MODE_LABELS = {
 function cloneTemplateConfig(template){
   return {
     baseChordIds: [...template.baseChordIds],
-    extensionIds: [...template.extensionIds],
+    tensionIds: [...template.tensionIds],
     playbackMode: template.playbackMode,
   };
 }
@@ -119,7 +119,7 @@ export function initEarTraining(){
   container.innerHTML = `
     <div class="card">
       <h2>和弦练耳</h2>
-      <p class="module-intro">模板只是起点，核心是自己配置 base chord、extension 和播放方式。</p>
+      <p class="module-intro">模板只是起点，核心是自己配置 base chord、单个 tension 和播放方式。</p>
       <div class="ear-config-panel">
         <div class="controls ear-controls" id="et-controls"></div>
         <div class="ear-chip-section">
@@ -131,8 +131,8 @@ export function initEarTraining(){
         </div>
         <div class="ear-chip-section">
           <div class="ear-section-head">
-            <h3>Extensions</h3>
-            <span>决定是否只听 base、还是加入 9 / 11 / 13</span>
+            <h3>Tension</h3>
+            <span>每道题只会取一个 tension，比如 none、♭9、9、♯9</span>
           </div>
           <div class="choice-chip-grid" id="et-ext-grid"></div>
         </div>
@@ -250,7 +250,7 @@ export function initEarTraining(){
 
   function renderConfigChips(){
     baseGrid.innerHTML = renderChipButtons(BASE_CHORD_TYPES, state.config.baseChordIds, 'base');
-    extGrid.innerHTML = renderChipButtons(EXTENSION_OPTIONS, state.config.extensionIds, 'extension');
+    extGrid.innerHTML = renderChipButtons(TENSION_OPTIONS, state.config.tensionIds, 'tension');
     playbackToggle.querySelectorAll('button').forEach(button => {
       button.classList.toggle('active', button.dataset.playback === state.config.playbackMode);
     });
@@ -462,11 +462,11 @@ export function initEarTraining(){
   });
 
   extGrid.addEventListener('click', event => {
-    const button = event.target.closest('button[data-kind="extension"]');
+    const button = event.target.closest('button[data-kind="tension"]');
     if(!button) return;
     handleConfigMutation(config => ({
       ...config,
-      extensionIds: toggleListValue(config.extensionIds, button.dataset.id),
+      tensionIds: toggleListValue(config.tensionIds, button.dataset.id),
     }));
   });
 
