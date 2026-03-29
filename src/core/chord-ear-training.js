@@ -1,4 +1,5 @@
 import { NOTES, NOTE_NAMES_FLAT } from './music-theory.js';
+import { DROP2, DROP3, STRING_SETS, transposeVoicing } from './chord-voicings.js';
 
 const SHARP_NAMES_ASCII = NOTES.map(note => note.replace('♯', '#'));
 const CHROMATIC_ROOTS = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
@@ -188,6 +189,12 @@ const REFERENCE_DIAGRAMS = {
     m7: 'drop3-min7.png',
     'm7b5': 'drop3-min7b5.png',
   },
+};
+const VOICING_QUALITY_MAP = {
+  maj7: 'Maj7',
+  '7': 'Dom7',
+  m7: 'Min7',
+  m7b5: 'Min7b5',
 };
 
 const FAMILY_CONFIG = {
@@ -632,6 +639,85 @@ function getReferenceDiagram(chordId, voicingFamily = 'close'){
   };
 }
 
+function getDynamicVoicingLibrary(voicingFamily){
+  if(voicingFamily === 'drop2') return DROP2;
+  if(voicingFamily === 'drop3') return DROP3;
+  return null;
+}
+
+function getDynamicVoicingQuality(chordId){
+  return VOICING_QUALITY_MAP[chordId] ?? null;
+}
+
+function getBestDynamicVoicing(root, chordId, voicingFamily, inversion){
+  const library = getDynamicVoicingLibrary(voicingFamily);
+  const quality = getDynamicVoicingQuality(chordId);
+  if(!library || !quality) return null;
+
+  const qualityVoicings = library[quality];
+  if(!qualityVoicings) return null;
+
+  const rootOffset = noteToSemitone(root);
+  const candidates = STRING_SETS
+    .map((set, setIndex) => {
+      const source = qualityVoicings[set.id]?.[inversion];
+      if(!source) return null;
+      const frets = transposeVoicing(source.frets, rootOffset);
+      const positiveFrets = frets.filter(fret => fret > 0);
+      const maxFret = positiveFrets.length ? Math.max(...positiveFrets) : 0;
+      const minFret = positiveFrets.length ? Math.min(...positiveFrets) : 0;
+      const span = positiveFrets.length ? maxFret - minFret : 0;
+
+      return {
+        set,
+        frets,
+        score: [maxFret, span, minFret, setIndex],
+      };
+    })
+    .filter(Boolean);
+
+  if(!candidates.length) return null;
+
+  candidates.sort((left, right) => {
+    for(let index = 0; index < left.score.length; index += 1){
+      const diff = left.score[index] - right.score[index];
+      if(diff !== 0) return diff;
+    }
+    return 0;
+  });
+
+  return candidates[0];
+}
+
+function buildDynamicDiagram(root, chordId, voicingFamily, inversion){
+  const bestVoicing = getBestDynamicVoicing(root, chordId, voicingFamily, inversion);
+  if(!bestVoicing) return null;
+
+  const positiveFrets = bestVoicing.frets.filter(fret => fret > 0);
+  const minPositiveFret = positiveFrets.length ? Math.min(...positiveFrets) : 1;
+  const maxPositiveFret = positiveFrets.length ? Math.max(...positiveFrets) : 1;
+  const baseFret = maxPositiveFret <= 4 ? 1 : minPositiveFret;
+
+  return {
+    kind: 'dynamic',
+    title: `${formatRootLabel(root)}${getChordDefinition(chordId).answerLabel} · ${getVoicingFamilyLabel(voicingFamily)} · ${getInversionLabel(inversion)}`,
+    caption: `Current root-transposed shape on ${bestVoicing.set.label}.`,
+    strings: bestVoicing.set.strings.map(stringIndex => stringIndex + 1),
+    stringSetLabel: bestVoicing.set.label,
+    frets: [...bestVoicing.frets],
+    baseFret,
+    mutedStrings: [1, 2, 3, 4, 5, 6].filter(stringNumber => !bestVoicing.set.strings.includes(stringNumber - 1)),
+  };
+}
+
+function getQuestionDiagram(root, chordId, voicingFamily, inversion){
+  const dynamicDiagram = buildDynamicDiagram(root, chordId, voicingFamily, inversion);
+  if(dynamicDiagram){
+    return dynamicDiagram;
+  }
+  return getReferenceDiagram(chordId, voicingFamily);
+}
+
 function getVoicingVariantCount(chordId, config = {}){
   const definition = getChordDefinition(chordId);
   return getAvailableInversions(
@@ -780,7 +866,7 @@ export function buildChordNotes(root, chordId, optionsOrBaseOctave = 3){
   const inversion = pickFromList(safeInversionChoices, options.randomFn);
   const voicedIntervals = applyVoicingFamily(definition.intervals, inversion, options.voicingFamily);
   const midiNotes = voicedIntervals.map(interval => baseMidi + interval);
-  const diagram = getReferenceDiagram(chordId, options.voicingFamily);
+  const diagram = getQuestionDiagram(root, chordId, options.voicingFamily, inversion);
 
   return {
     root,

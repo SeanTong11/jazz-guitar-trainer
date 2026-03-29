@@ -71,8 +71,9 @@ npm run preview
   - `三转位`
   - `随机转位`
 - `Voicing Feedback`
-  - 答题后显示当前 voicing family 的可移动指板参考图
-  - 首版先覆盖 `封闭 / Drop 2 / Drop 3`
+  - 答题后显示当前 voicing family 的弹法参考图
+  - `Drop 2 / Drop 3` 现在会按当前 root 渲染动态和弦图
+  - `封闭` 当前仍保留静态参考图 fallback
 
 说明：
 

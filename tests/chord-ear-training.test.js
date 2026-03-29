@@ -197,7 +197,7 @@ test('createQuestion uses selected chord pool as answer options', () => {
   assert.equal(question.signature, 'D:7:0');
 });
 
-test('createQuestion includes reference diagram metadata for supported drop voicings', () => {
+test('createQuestion includes dynamic fretboard metadata for supported drop voicings', () => {
   const question = createQuestion({
     config: {
       baseChordIds: ['major'],
@@ -211,8 +211,30 @@ test('createQuestion includes reference diagram metadata for supported drop voic
   });
 
   assert.equal(question.voicingFamily, 'drop2');
-  assert.equal(question.diagram.image, 'drop2-maj7.png');
-  assert.match(question.diagram.title, /Drop 2/i);
+  assert.equal(question.diagram.kind, 'dynamic');
+  assert.equal(question.diagram.title, 'Cmaj7 · Drop 2 · 一转位');
+  assert.equal(question.diagram.baseFret, 1);
+  assert.deepEqual(question.diagram.strings, [2, 3, 4, 5]);
+  assert.deepEqual(question.diagram.frets, [1, 0, 2, 2]);
+});
+
+test('createQuestion transposes dynamic fretboard metadata with the current root', () => {
+  const question = createQuestion({
+    config: {
+      baseChordIds: ['dominant'],
+      tensionIds: ['none'],
+      voicingFamily: 'drop3',
+      voicingMode: 'close-root',
+    },
+    rootMode: 'fixed',
+    fixedRoot: 'D',
+    randomFn: () => 0,
+  });
+
+  assert.equal(question.diagram.kind, 'dynamic');
+  assert.equal(question.diagram.title, 'D7 · Drop 3 · 原位');
+  assert.deepEqual(question.diagram.strings, [3, 4, 5, 6]);
+  assert.deepEqual(question.diagram.frets, [5, 7, 5, 2]);
 });
 
 test('createQuestion switches to root answers when only one chord is left and root is random', () => {

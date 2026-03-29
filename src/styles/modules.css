@@ -498,11 +498,19 @@ select optgroup { font-weight: 600; color: var(--text-muted); }
   border-radius: var(--radius-sm);
   background: rgba(248,250,252,0.85);
 }
+.ear-diagram-image-wrap.is-dynamic {
+  padding: 14px;
+}
 .ear-diagram-image {
   width: 100%;
   max-width: 720px;
   border-radius: 12px;
   box-shadow: 4px 4px 12px rgba(0,0,0,0.08);
+}
+.ear-diagram-image-wrap svg {
+  width: 100%;
+  max-width: 280px;
+  height: auto;
 }
 .ear-diagram-caption {
   margin-top: 10px;
