@@ -72,8 +72,8 @@ npm run preview
   - `随机转位`
 - `Voicing Feedback`
   - 答题后显示当前 voicing family 的弹法参考图
-  - `Drop 2 / Drop 3` 现在会按当前 root 渲染动态和弦图
-  - `封闭` 当前仍保留静态参考图 fallback
+  - 当前练耳模块已经统一改成动态和弦图
+  - 会按当前 root、voicing family 和 inversion 渲染指板参考
 
 说明：
 

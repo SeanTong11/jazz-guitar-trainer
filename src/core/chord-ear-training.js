@@ -196,6 +196,7 @@ const VOICING_QUALITY_MAP = {
   m7: 'Min7',
   m7b5: 'Min7b5',
 };
+const GUITAR_TUNING_HIGH_TO_LOW = [64, 59, 55, 50, 45, 40];
 
 const FAMILY_CONFIG = {
   'major-triad': {
@@ -689,11 +690,95 @@ function getBestDynamicVoicing(root, chordId, voicingFamily, inversion){
   return candidates[0];
 }
 
-function buildDynamicDiagram(root, chordId, voicingFamily, inversion){
-  const bestVoicing = getBestDynamicVoicing(root, chordId, voicingFamily, inversion);
-  if(!bestVoicing) return null;
+function buildContiguousStringSets(size){
+  if(size < 2 || size > 6) return [];
+  return Array.from({ length: 7 - size }, (_, start) => ({
+    label: `${start + 1}-${start + size}`,
+    strings: Array.from({ length: size }, (_, index) => start + index),
+  }));
+}
 
-  const positiveFrets = bestVoicing.frets.filter(fret => fret > 0);
+function voicesToFretsTopDown(noteClasses, strings){
+  let previousMidi = Infinity;
+  const frets = [];
+
+  for(let index = 0; index < noteClasses.length; index += 1){
+    const openMidi = GUITAR_TUNING_HIGH_TO_LOW[strings[index]];
+    const noteClass = ((noteClasses[index] % 12) + 12) % 12;
+    const candidates = [];
+
+    for(let fret = 0; fret <= 15; fret += 1){
+      if((openMidi + fret) % 12 === noteClass){
+        candidates.push(openMidi + fret);
+      }
+    }
+
+    if(!candidates.length){
+      return null;
+    }
+
+    if(index === 0){
+      frets.push(candidates[0] - openMidi);
+      previousMidi = candidates[0];
+      continue;
+    }
+
+    let bestMidi = candidates.filter(midi => midi < previousMidi).pop();
+    if(bestMidi === undefined){
+      bestMidi = candidates[0];
+    }
+
+    frets.push(bestMidi - openMidi);
+    previousMidi = bestMidi;
+  }
+
+  return frets;
+}
+
+function getBestGenericDiagramVoicing(midiNotes){
+  const noteClassesTopDown = [...midiNotes]
+    .reverse()
+    .map(midi => ((midi % 12) + 12) % 12);
+  const stringSets = buildContiguousStringSets(noteClassesTopDown.length);
+  const candidates = stringSets
+    .map((set, setIndex) => {
+      const frets = voicesToFretsTopDown(noteClassesTopDown, set.strings);
+      if(!frets) return null;
+
+      const positiveFrets = frets.filter(fret => fret > 0);
+      const maxFret = positiveFrets.length ? Math.max(...positiveFrets) : 0;
+      const minFret = positiveFrets.length ? Math.min(...positiveFrets) : 0;
+      const span = positiveFrets.length ? maxFret - minFret : 0;
+
+      return {
+        set,
+        frets,
+        score: [maxFret, span, minFret, setIndex],
+      };
+    })
+    .filter(Boolean);
+
+  if(!candidates.length){
+    return null;
+  }
+
+  candidates.sort((left, right) => {
+    for(let index = 0; index < left.score.length; index += 1){
+      const diff = left.score[index] - right.score[index];
+      if(diff !== 0) return diff;
+    }
+    return 0;
+  });
+
+  return candidates[0];
+}
+
+function buildDynamicDiagram(root, chordId, voicingFamily, inversion, midiNotes){
+  const bestVoicing = getBestDynamicVoicing(root, chordId, voicingFamily, inversion);
+  const fallbackVoicing = bestVoicing ?? getBestGenericDiagramVoicing(midiNotes);
+  if(!fallbackVoicing) return null;
+
+  const positiveFrets = fallbackVoicing.frets.filter(fret => fret > 0);
   const minPositiveFret = positiveFrets.length ? Math.min(...positiveFrets) : 1;
   const maxPositiveFret = positiveFrets.length ? Math.max(...positiveFrets) : 1;
   const baseFret = maxPositiveFret <= 4 ? 1 : minPositiveFret;
@@ -701,17 +786,17 @@ function buildDynamicDiagram(root, chordId, voicingFamily, inversion){
   return {
     kind: 'dynamic',
     title: `${formatRootLabel(root)}${getChordDefinition(chordId).answerLabel} · ${getVoicingFamilyLabel(voicingFamily)} · ${getInversionLabel(inversion)}`,
-    caption: `Current root-transposed shape on ${bestVoicing.set.label}.`,
-    strings: bestVoicing.set.strings.map(stringIndex => stringIndex + 1),
-    stringSetLabel: bestVoicing.set.label,
-    frets: [...bestVoicing.frets],
+    caption: `Current root-transposed shape on ${fallbackVoicing.set.label}.`,
+    strings: fallbackVoicing.set.strings.map(stringIndex => stringIndex + 1),
+    stringSetLabel: fallbackVoicing.set.label,
+    frets: [...fallbackVoicing.frets],
     baseFret,
-    mutedStrings: [1, 2, 3, 4, 5, 6].filter(stringNumber => !bestVoicing.set.strings.includes(stringNumber - 1)),
+    mutedStrings: [1, 2, 3, 4, 5, 6].filter(stringNumber => !fallbackVoicing.set.strings.includes(stringNumber - 1)),
   };
 }
 
-function getQuestionDiagram(root, chordId, voicingFamily, inversion){
-  const dynamicDiagram = buildDynamicDiagram(root, chordId, voicingFamily, inversion);
+function getQuestionDiagram(root, chordId, voicingFamily, inversion, midiNotes){
+  const dynamicDiagram = buildDynamicDiagram(root, chordId, voicingFamily, inversion, midiNotes);
   if(dynamicDiagram){
     return dynamicDiagram;
   }
@@ -866,7 +951,7 @@ export function buildChordNotes(root, chordId, optionsOrBaseOctave = 3){
   const inversion = pickFromList(safeInversionChoices, options.randomFn);
   const voicedIntervals = applyVoicingFamily(definition.intervals, inversion, options.voicingFamily);
   const midiNotes = voicedIntervals.map(interval => baseMidi + interval);
-  const diagram = getQuestionDiagram(root, chordId, options.voicingFamily, inversion);
+  const diagram = getQuestionDiagram(root, chordId, options.voicingFamily, inversion, midiNotes);
 
   return {
     root,

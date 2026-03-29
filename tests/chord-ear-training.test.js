@@ -192,9 +192,28 @@ test('createQuestion uses selected chord pool as answer options', () => {
   assert.equal(question.root, 'D');
   assert.equal(question.chordId, '7');
   assert.equal(question.voicingFamily, 'close');
+  assert.equal(question.diagram.kind, 'dynamic');
   assert.equal(question.voicingLabel, '原位');
   assert.deepEqual(question.optionLabels, ['7', '7♭9', '9', '7♯9']);
   assert.equal(question.signature, 'D:7:0');
+});
+
+test('createQuestion also renders close voicings as dynamic fretboard metadata', () => {
+  const question = createQuestion({
+    config: {
+      baseChordIds: ['major'],
+      tensionIds: ['13'],
+      voicingFamily: 'close',
+      voicingMode: 'close-root',
+    },
+    rootMode: 'fixed',
+    fixedRoot: 'C',
+    randomFn: () => 0,
+  });
+
+  assert.equal(question.diagram.kind, 'dynamic');
+  assert.equal(question.diagram.title, 'Cmaj13 · 封闭 · 原位');
+  assert.deepEqual(question.diagram.strings, [1, 2, 3, 4, 5]);
 });
 
 test('createQuestion includes dynamic fretboard metadata for supported drop voicings', () => {
