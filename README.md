@@ -74,6 +74,8 @@ npm run preview
   - 答题后显示当前 voicing family 的弹法参考图
   - 当前练耳模块已经统一改成动态和弦图
   - 会按当前 root、voicing family 和 inversion 渲染指板参考
+  - 会给出多组可替代的 string-set 参考，而不是只显示一个按法
+  - 圆点显示相对音程，左侧显示当前图内每一格对应的 fret
 
 说明：
 

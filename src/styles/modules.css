@@ -475,6 +475,11 @@ select optgroup { font-weight: 600; color: var(--text-muted); }
   border-top: 1px solid rgba(71,85,105,0.12);
   padding-top: 16px;
 }
+.ear-diagram-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
+}
 .ear-diagram-head {
   display: flex;
   justify-content: space-between;
@@ -490,6 +495,27 @@ select optgroup { font-weight: 600; color: var(--text-muted); }
 .ear-diagram-head span {
   color: var(--text-muted);
   font-size: 0.8rem;
+}
+.ear-diagram-option {
+  border: 2px solid rgba(71,85,105,0.12);
+  border-radius: var(--radius-sm);
+  padding: 14px;
+  background: rgba(255,255,255,0.72);
+}
+.ear-diagram-option-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+.ear-diagram-option-head strong {
+  font-family: var(--font-mono);
+  font-size: 0.86rem;
+  color: var(--text);
+}
+.ear-diagram-option-head span {
+  color: var(--text-muted);
+  font-size: 0.76rem;
 }
 .ear-diagram-image-wrap {
   display: flex;

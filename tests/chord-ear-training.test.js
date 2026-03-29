@@ -213,7 +213,10 @@ test('createQuestion also renders close voicings as dynamic fretboard metadata',
 
   assert.equal(question.diagram.kind, 'dynamic');
   assert.equal(question.diagram.title, 'Cmaj13 · 封闭 · 原位');
+  assert.ok(Array.isArray(question.diagrams));
+  assert.equal(question.diagrams.length, 2);
   assert.deepEqual(question.diagram.strings, [1, 2, 3, 4, 5]);
+  assert.deepEqual(question.diagram.intervalLabels, ['13', '7', '5', '3', '1']);
 });
 
 test('createQuestion includes dynamic fretboard metadata for supported drop voicings', () => {
@@ -235,6 +238,8 @@ test('createQuestion includes dynamic fretboard metadata for supported drop voic
   assert.equal(question.diagram.baseFret, 1);
   assert.deepEqual(question.diagram.strings, [2, 3, 4, 5]);
   assert.deepEqual(question.diagram.frets, [1, 0, 2, 2]);
+  assert.deepEqual(question.diagram.intervalLabels, ['1', '5', '3', '7']);
+  assert.equal(question.diagrams.length, 3);
 });
 
 test('createQuestion transposes dynamic fretboard metadata with the current root', () => {

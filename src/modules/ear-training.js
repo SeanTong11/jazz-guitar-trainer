@@ -127,7 +127,10 @@ function renderDynamicDiagramSVG(diagram){
   const stringNumbers = [6, 5, 4, 3, 2, 1];
 
   const markerMap = new Map(
-    diagram.strings.map((stringNumber, index) => [stringNumber, diagram.frets[index]]),
+    diagram.strings.map((stringNumber, index) => [stringNumber, {
+      fret: diagram.frets[index],
+      intervalLabel: diagram.intervalLabels?.[index] ?? '',
+    }]),
   );
 
   let svg = `<svg viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${diagram.title}">`;
@@ -146,8 +149,10 @@ function renderDynamicDiagramSVG(diagram){
     svg += `<line x1="${marginLeft}" y1="${y}" x2="${marginLeft + boardWidth}" y2="${y}" stroke="${stroke}" stroke-width="${strokeWidth}"/>`;
   }
 
-  if(diagram.baseFret > 1){
-    svg += `<text x="12" y="${topY + fretGap + 4}" fill="#0F172A" font-size="12" font-weight="700">${diagram.baseFret}fr</text>`;
+  for(let fret = 1; fret <= 4; fret += 1){
+    const fretNumber = diagram.baseFret === 1 ? fret : (diagram.baseFret + fret - 1);
+    const y = topY + ((fret - 0.5) * fretGap) + 4;
+    svg += `<text x="16" y="${y}" fill="#64748B" font-size="10" font-weight="700" text-anchor="middle">${fretNumber}</text>`;
   }
 
   stringNumbers.forEach((stringNumber, index) => {
@@ -157,7 +162,8 @@ function renderDynamicDiagramSVG(diagram){
       return;
     }
 
-    const fret = markerMap.get(stringNumber);
+    const marker = markerMap.get(stringNumber);
+    const fret = marker?.fret;
     if(fret === 0){
       svg += `<text x="${x}" y="${topY - 12}" fill="#16A34A" font-size="12" font-weight="700" text-anchor="middle">O</text>`;
       return;
@@ -167,42 +173,60 @@ function renderDynamicDiagramSVG(diagram){
     const relativeFret = diagram.baseFret === 1 ? fret : (fret - diagram.baseFret + 1);
     const y = topY + ((relativeFret - 0.5) * fretGap);
     svg += `<circle cx="${x}" cy="${y}" r="11" fill="#7C3AED"/>`;
-    svg += `<text x="${x}" y="${y + 4}" fill="#FFFFFF" font-size="10" font-weight="700" text-anchor="middle">${fret}</text>`;
+    svg += `<text x="${x}" y="${y + 4}" fill="#FFFFFF" font-size="10" font-weight="700" text-anchor="middle">${marker.intervalLabel}</text>`;
   });
 
   svg += `</svg>`;
   return svg;
 }
 
-function renderDiagramMarkup(question){
-  if(!question.diagram){
-    return '';
-  }
-
-  const bodyMarkup = question.diagram.kind === 'dynamic'
+function renderDiagramFigure(diagram){
+  const bodyMarkup = diagram.kind === 'dynamic'
     ? `
       <div class="ear-diagram-image-wrap is-dynamic">
-        ${renderDynamicDiagramSVG(question.diagram)}
+        ${renderDynamicDiagramSVG(diagram)}
       </div>
     `
     : `
       <div class="ear-diagram-image-wrap">
         <img
           class="ear-diagram-image"
-          src="${import.meta.env.BASE_URL}chords/${question.diagram.image}"
-          alt="${question.diagram.title}"
+          src="${import.meta.env.BASE_URL}chords/${diagram.image}"
+          alt="${diagram.title}"
         >
       </div>
     `;
 
   return `
+    <article class="ear-diagram-option">
+      <div class="ear-diagram-option-head">
+        <strong>${diagram.stringSetLabel ? `${diagram.stringSetLabel} 弦组` : diagram.title}</strong>
+        ${diagram.stringSetLabel ? `<span>${diagram.title}</span>` : ''}
+      </div>
+      ${bodyMarkup}
+      <p class="ear-diagram-caption">${diagram.caption}</p>
+    </article>
+  `;
+}
+
+function renderDiagramMarkup(question){
+  const diagrams = question.diagrams?.length
+    ? question.diagrams
+    : (question.diagram ? [question.diagram] : []);
+
+  if(!diagrams.length){
+    return '';
+  }
+
+  return `
     <div class="ear-diagram-card">
       <div class="ear-diagram-head">
         <strong>Voicing Reference</strong>
-        <span>${question.diagram.title}</span>
+        <span>${diagrams.length} Variations · 圆点显示音程，左侧显示品位</span>
       </div>
-      ${bodyMarkup}
-      <p class="ear-diagram-caption">${question.diagram.caption}</p>
+      <div class="ear-diagram-grid">
+        ${diagrams.map(renderDiagramFigure).join('')}
+      </div>
     </div>
   `;
 }
