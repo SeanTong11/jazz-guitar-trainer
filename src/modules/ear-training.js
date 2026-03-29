@@ -4,6 +4,7 @@ import {
   BASE_CHORD_TYPES,
   TENSION_OPTIONS,
   TRAINING_TEMPLATES,
+  VOICING_FAMILY_OPTIONS,
   VOICING_OPTIONS,
   buildChordPool,
   buildPlaybackEvents,
@@ -21,6 +22,9 @@ const PLAYBACK_MODE_LABELS = {
   arpeggio: '琶音',
   both: '先琶音后和弦',
 };
+const VOICING_FAMILY_LABELS = Object.fromEntries(
+  VOICING_FAMILY_OPTIONS.map(option => [option.id, option.label]),
+);
 const ANSWER_MODE_LABELS = {
   chord: '和弦',
   root: '根音',
@@ -35,6 +39,7 @@ function cloneTemplateConfig(template){
     baseChordIds: [...template.baseChordIds],
     tensionIds: [...template.tensionIds],
     playbackMode: template.playbackMode,
+    voicingFamily: template.voicingFamily ?? 'close',
     voicingMode: template.voicingMode ?? 'close-root',
     randomRootIds: [],
     randomVoicingIds: [],
@@ -46,6 +51,7 @@ function createCustomConfig(){
     baseChordIds: [],
     tensionIds: [],
     playbackMode: 'chord',
+    voicingFamily: 'close',
     voicingMode: 'close-root',
     randomRootIds: [],
     randomVoicingIds: [],
@@ -96,14 +102,37 @@ function getPromptText(answerMode){
   }[answerMode];
 }
 
-function renderQuestionPrompt(questionNumber, playbackMode, voicingMode, answerMode, optionCount){
+function renderQuestionPrompt(questionNumber, playbackMode, voicingFamily, voicingMode, answerMode, optionCount){
   return `
     <div class="ear-prompt">
       <span class="ear-prompt-kicker">
-        Question ${questionNumber} · ${PLAYBACK_MODE_LABELS[playbackMode]} · ${VOICING_MODE_LABELS[voicingMode]} · 识别${ANSWER_MODE_LABELS[answerMode]} · ${optionCount} Options
+        Question ${questionNumber} · ${PLAYBACK_MODE_LABELS[playbackMode]} · ${VOICING_FAMILY_LABELS[voicingFamily]} · ${VOICING_MODE_LABELS[voicingMode]} · 识别${ANSWER_MODE_LABELS[answerMode]} · ${optionCount} Options
       </span>
       <strong>Listen</strong>
       <p>${getPromptText(answerMode)}</p>
+    </div>
+  `;
+}
+
+function renderDiagramMarkup(question){
+  if(!question.diagram?.image){
+    return '';
+  }
+
+  return `
+    <div class="ear-diagram-card">
+      <div class="ear-diagram-head">
+        <strong>Voicing Reference</strong>
+        <span>${question.diagram.title}</span>
+      </div>
+      <div class="ear-diagram-image-wrap">
+        <img
+          class="ear-diagram-image"
+          src="${import.meta.env.BASE_URL}chords/${question.diagram.image}"
+          alt="${question.diagram.title}"
+        >
+      </div>
+      <p class="ear-diagram-caption">${question.diagram.caption}</p>
     </div>
   `;
 }
@@ -125,10 +154,12 @@ function renderFeedbackMarkup(question, isCorrect){
       <div class="ear-feedback-meta">
         <span><b>Notes:</b> ${question.noteLabels.join(' · ')}</span>
         <span><b>Tensions:</b> ${tensionText}</span>
+        <span><b>Voicing Family:</b> ${question.voicingFamilyLabel}</span>
         <span><b>Voicing:</b> ${question.voicingLabel}</span>
         <span><b>Target:</b> ${ANSWER_MODE_LABELS[question.answerMode]}</span>
       </div>
       <div class="ear-feedback-context">${PLAYBACK_MODE_LABELS[question.playbackMode]} playback · ${question.voicingLabel}</div>
+      ${renderDiagramMarkup(question)}
     </div>
   `;
 }
@@ -198,7 +229,7 @@ export function initEarTraining(){
   container.innerHTML = `
     <div class="card">
       <h2>和弦练耳</h2>
-      <p class="module-intro">模板只是起点，核心是自己配置 base chord、单个 tension、播放方式和转位。当前版本仅支持封闭排列。</p>
+      <p class="module-intro">模板只是起点，核心是自己配置 base chord、单个 tension、播放方式、voicing family 和转位。当前版本先支持封闭、Drop 2、Drop 3，并在答题后给出对应弹法参考图。</p>
       <div class="ear-config-panel">
         <div class="controls ear-controls" id="et-controls"></div>
         <div class="ear-chip-section">
@@ -288,6 +319,16 @@ export function initEarTraining(){
   `;
   controls.appendChild(playbackToggle);
 
+  const voicingFamilyToggle = document.createElement('div');
+  voicingFamilyToggle.className = 'degree-toggle degree-toggle-wide';
+  voicingFamilyToggle.id = 'et-voicing-family';
+  voicingFamilyToggle.innerHTML = `
+    <button class="active" data-family="close">封闭</button>
+    <button data-family="drop2">Drop 2</button>
+    <button data-family="drop3">Drop 3</button>
+  `;
+  controls.appendChild(voicingFamilyToggle);
+
   const voicingToggle = document.createElement('div');
   voicingToggle.className = 'degree-toggle degree-toggle-wide';
   voicingToggle.id = 'et-voicing-mode';
@@ -340,6 +381,7 @@ export function initEarTraining(){
 
     return {
       ...nextConfig,
+      voicingFamily: nextConfig.voicingFamily ?? 'close',
       voicingMode: availableVoicingIds.includes(nextConfig.voicingMode)
         ? nextConfig.voicingMode
         : fallbackVoicingId,
@@ -381,7 +423,7 @@ export function initEarTraining(){
           <strong>Current Pool</strong>
           <span>0 chords · ${PLAYBACK_MODE_LABELS[state.config.playbackMode]} · 识别${ANSWER_MODE_LABELS[answerContext.answerMode]}</span>
         </div>
-        <div class="ear-preview-empty">当前选择没有生成出有效题目，请至少保留一个兼容的 base chord + tension 组合。</div>
+        <div class="ear-preview-empty">当前选择没有生成出有效题目，请至少保留一个兼容的 base chord + tension + voicing family 组合。</div>
       `;
       return;
     }
@@ -393,6 +435,7 @@ export function initEarTraining(){
         <span>${pool.length} chords · ${PLAYBACK_MODE_LABELS[state.config.playbackMode]} · 识别${ANSWER_MODE_LABELS[answerContext.answerMode]}</span>
       </div>
       <div class="ear-preview-meta">
+        <span>Voicing Family: ${VOICING_FAMILY_LABELS[state.config.voicingFamily]}</span>
         <span>转位: ${VOICING_MODE_LABELS[state.config.voicingMode]}</span>
         ${state.rootMode === 'random' ? `<span>根音范围: ${formatRandomRootSummary(state.config.randomRootIds)}</span>` : ''}
         ${state.config.voicingMode === 'close-random' ? `<span>转位范围: ${formatRandomVoicingSummary(state.config.randomVoicingIds)}</span>` : ''}
@@ -432,6 +475,10 @@ export function initEarTraining(){
       button.classList.toggle('active', button.dataset.playback === state.config.playbackMode);
     });
 
+    voicingFamilyToggle.querySelectorAll('button').forEach(button => {
+      button.classList.toggle('active', button.dataset.family === state.config.voicingFamily);
+    });
+
     voicingToggle.querySelectorAll('button').forEach(button => {
       const isAvailable = availableVoicingIds.includes(button.dataset.voicing);
       button.disabled = !isAvailable;
@@ -460,6 +507,7 @@ export function initEarTraining(){
     questionEl.innerHTML = renderQuestionPrompt(
       state.attempted + 1,
       state.config.playbackMode,
+      question.voicingFamily,
       question.voicingMode,
       question.answerMode,
       question.optionIds.length,
@@ -483,6 +531,7 @@ export function initEarTraining(){
     questionEl.innerHTML = renderQuestionPrompt(
       1,
       state.config.playbackMode,
+      state.config.voicingFamily,
       state.config.voicingMode,
       answerContext.answerMode,
       0,
@@ -585,6 +634,7 @@ export function initEarTraining(){
     questionEl.innerHTML = renderQuestionPrompt(
       1,
       state.config.playbackMode,
+      state.config.voicingFamily,
       state.config.voicingMode,
       answerContext.answerMode,
       answerContext.optionIds.length,
@@ -660,6 +710,15 @@ export function initEarTraining(){
     handleConfigMutation(config => ({
       ...config,
       playbackMode: toggleButton.dataset.playback,
+    }));
+  });
+
+  voicingFamilyToggle.addEventListener('click', event => {
+    const toggleButton = event.target.closest('button[data-family]');
+    if(!toggleButton) return;
+    handleConfigMutation(config => ({
+      ...config,
+      voicingFamily: toggleButton.dataset.family,
     }));
   });
 

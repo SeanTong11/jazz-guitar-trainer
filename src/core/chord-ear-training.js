@@ -126,12 +126,68 @@ export const VOICING_OPTIONS = [
   },
 ];
 
+export const VOICING_FAMILY_OPTIONS = [
+  {
+    id: 'close',
+    label: '封闭',
+    description: 'Closed-position voicings and inversions.',
+  },
+  {
+    id: 'drop2',
+    label: 'Drop 2',
+    description: 'Four-note drop-2 voicings for core seventh-chord families.',
+  },
+  {
+    id: 'drop3',
+    label: 'Drop 3',
+    description: 'Four-note drop-3 voicings for core seventh-chord families.',
+  },
+];
+
 const SPECIFIC_VOICING_OPTION_IDS = ['close-root', 'close-first', 'close-second', 'close-third'];
 const VOICING_ID_TO_INVERSION = {
   'close-root': 0,
   'close-first': 1,
   'close-second': 2,
   'close-third': 3,
+};
+const DROP_VOICING_FAMILY_IDS = ['drop2', 'drop3'];
+const DROP_VOICING_SUPPORTED_FAMILIES = ['major', 'dominant', 'minor', 'half-diminished'];
+const VOICING_FAMILY_LABELS = Object.fromEntries(
+  VOICING_FAMILY_OPTIONS.map(option => [option.id, option.label]),
+);
+const REFERENCE_DIAGRAMS = {
+  close: {
+    '6': 'maj6.png',
+    '6/9': 'maj69.png',
+    m6: 'min6.png',
+    maj7: 'maj7.png',
+    maj9: 'maj9.png',
+    'maj7#11': 'maj7s11.png',
+    maj13: 'maj13.png',
+    '7': 'dom7.png',
+    '9': 'dom9.png',
+    '13': 'dom13.png',
+    '7b9': 'dom7b9.png',
+    '7#9': 'dom7s9.png',
+    '7#11': 'dom7s11.png',
+    '7b13': 'dom7b13.png',
+    m7: 'min7.png',
+    'm7b5': 'min7b5.png',
+    dim7: 'dim7.png',
+  },
+  drop2: {
+    maj7: 'drop2-maj7.png',
+    '7': 'drop2-dom7.png',
+    m7: 'drop2-min7.png',
+    'm7b5': 'drop2-min7b5.png',
+  },
+  drop3: {
+    maj7: 'drop3-maj7.png',
+    '7': 'drop3-dom7.png',
+    m7: 'drop3-min7.png',
+    'm7b5': 'drop3-min7b5.png',
+  },
 };
 
 const FAMILY_CONFIG = {
@@ -439,6 +495,7 @@ function normalizeOptions(optionsOrBaseOctave){
   if(typeof optionsOrBaseOctave === 'number'){
     return {
       baseOctave: optionsOrBaseOctave,
+      voicingFamily: 'close',
       voicingMode: 'close-root',
       randomVoicingIds: [],
       randomFn: Math.random,
@@ -447,6 +504,7 @@ function normalizeOptions(optionsOrBaseOctave){
 
   return {
     baseOctave: optionsOrBaseOctave?.baseOctave ?? 3,
+    voicingFamily: optionsOrBaseOctave?.voicingFamily ?? 'close',
     voicingMode: optionsOrBaseOctave?.voicingMode ?? 'close-root',
     randomVoicingIds: optionsOrBaseOctave?.randomVoicingIds ?? [],
     randomFn: optionsOrBaseOctave?.randomFn ?? Math.random,
@@ -464,6 +522,22 @@ function getMaxInversion(familyId){
   return Math.max(FAMILY_CONFIG[familyId].shellIntervals.length - 1, 0);
 }
 
+function getVoicingFamilyLabel(voicingFamily = 'close'){
+  return VOICING_FAMILY_LABELS[voicingFamily] ?? voicingFamily;
+}
+
+function isDropVoicingCompatible(definition){
+  return definition.tensionId === 'none' &&
+    DROP_VOICING_SUPPORTED_FAMILIES.includes(definition.familyId);
+}
+
+function supportsVoicingFamily(definition, voicingFamily = 'close'){
+  if(!DROP_VOICING_FAMILY_IDS.includes(voicingFamily)){
+    return true;
+  }
+  return isDropVoicingCompatible(definition);
+}
+
 function getSpecificVoicingOptionIdsForFamily(familyId){
   const maxInversion = getMaxInversion(familyId);
   return SPECIFIC_VOICING_OPTION_IDS.filter(optionId => VOICING_ID_TO_INVERSION[optionId] <= maxInversion);
@@ -477,8 +551,12 @@ function getRandomVoicingOptionIdsForFamily(familyId, randomVoicingIds = []){
   return availableOptionIds;
 }
 
-function getAvailableInversions(familyId, voicingMode, randomVoicingIds = []){
+function getAvailableInversions(familyId, voicingMode, randomVoicingIds = [], voicingFamily = 'close'){
   const maxInversion = getMaxInversion(familyId);
+
+  if(DROP_VOICING_FAMILY_IDS.includes(voicingFamily) && maxInversion < 3){
+    return [];
+  }
 
   if(voicingMode === 'close-random'){
     return getRandomVoicingOptionIdsForFamily(familyId, randomVoicingIds)
@@ -510,8 +588,48 @@ function applyCloseVoicing(intervals, inversion){
     .concat(intervals.slice(0, inversion).map(interval => interval + 12));
 }
 
+function applyDropVoicing(intervals, dropIndexFromTop){
+  const targetIndex = intervals.length - dropIndexFromTop;
+  const droppedIntervals = intervals.map((interval, index) => (
+    index === targetIndex ? interval - 12 : interval
+  ));
+  return droppedIntervals.sort((left, right) => left - right);
+}
+
+function applyVoicingFamily(intervals, inversion, voicingFamily = 'close'){
+  const closeVoicing = applyCloseVoicing(intervals, inversion);
+
+  if(voicingFamily === 'drop2'){
+    return applyDropVoicing(closeVoicing, 2);
+  }
+
+  if(voicingFamily === 'drop3'){
+    return applyDropVoicing(closeVoicing, 3);
+  }
+
+  return closeVoicing;
+}
+
 function getVoicingLabel(inversion){
   return getInversionLabel(inversion);
+}
+
+function getVoicingDisplayLabel(inversion, voicingFamily = 'close'){
+  if(voicingFamily === 'close'){
+    return getVoicingLabel(inversion);
+  }
+  return `${getVoicingFamilyLabel(voicingFamily)} · ${getVoicingLabel(inversion)}`;
+}
+
+function getReferenceDiagram(chordId, voicingFamily = 'close'){
+  const image = REFERENCE_DIAGRAMS[voicingFamily]?.[chordId];
+  if(!image) return null;
+
+  return {
+    image,
+    title: `${getVoicingFamilyLabel(voicingFamily)} ${getChordDefinition(chordId).answerLabel}`,
+    caption: 'Movable shape reference for the current voicing family.',
+  };
 }
 
 function getVoicingVariantCount(chordId, config = {}){
@@ -520,6 +638,7 @@ function getVoicingVariantCount(chordId, config = {}){
     definition.familyId,
     config.voicingMode ?? 'close-root',
     config.randomVoicingIds,
+    config.voicingFamily,
   ).length;
 }
 
@@ -588,12 +707,14 @@ export function getAnswerModeContext({
 export function getAvailableVoicingOptionIds(config = {}){
   const baseChordIds = getSelectedIds(config.baseChordIds, ['major-triad', 'minor-triad', 'major', 'dominant', 'minor']);
   const tensionIds = getSelectedIds(config.tensionIds, ['none']);
+  const voicingFamily = config.voicingFamily ?? 'close';
 
   return VOICING_OPTIONS
     .filter(option => CHORD_DEFINITIONS.some(definition => (
       baseChordIds.includes(definition.familyId) &&
       tensionIds.includes(definition.tensionId) &&
-      getAvailableInversions(definition.familyId, option.id).length > 0
+      supportsVoicingFamily(definition, voicingFamily) &&
+      getAvailableInversions(definition.familyId, option.id, [], voicingFamily).length > 0
     )))
     .map(option => option.id);
 }
@@ -627,12 +748,14 @@ export function buildChordPool(config = {}){
   const baseChordIds = getSelectedIds(config.baseChordIds, ['major-triad', 'minor-triad', 'major', 'dominant', 'minor']);
   const tensionIds = getSelectedIds(config.tensionIds, ['none']);
   const voicingMode = config.voicingMode ?? 'close-root';
+  const voicingFamily = config.voicingFamily ?? 'close';
 
   return CHORD_DEFINITIONS
     .filter(definition => (
       baseChordIds.includes(definition.familyId) &&
       tensionIds.includes(definition.tensionId) &&
-      getAvailableInversions(definition.familyId, voicingMode, config.randomVoicingIds).length > 0
+      supportsVoicingFamily(definition, voicingFamily) &&
+      getAvailableInversions(definition.familyId, voicingMode, config.randomVoicingIds, voicingFamily).length > 0
     ))
     .sort((left, right) => {
       const baseComparison = BASE_ORDER.indexOf(left.familyId) - BASE_ORDER.indexOf(right.familyId);
@@ -651,11 +774,13 @@ export function buildChordNotes(root, chordId, optionsOrBaseOctave = 3){
     definition.familyId,
     options.voicingMode,
     options.randomVoicingIds,
+    options.voicingFamily,
   );
   const safeInversionChoices = inversionChoices.length ? inversionChoices : [0];
   const inversion = pickFromList(safeInversionChoices, options.randomFn);
-  const voicedIntervals = applyCloseVoicing(definition.intervals, inversion);
+  const voicedIntervals = applyVoicingFamily(definition.intervals, inversion, options.voicingFamily);
   const midiNotes = voicedIntervals.map(interval => baseMidi + interval);
+  const diagram = getReferenceDiagram(chordId, options.voicingFamily);
 
   return {
     root,
@@ -665,10 +790,13 @@ export function buildChordNotes(root, chordId, optionsOrBaseOctave = 3){
     definition,
     inversion,
     inversionLabel: getInversionLabel(inversion),
+    voicingFamily: options.voicingFamily,
+    voicingFamilyLabel: getVoicingFamilyLabel(options.voicingFamily),
     voicingMode: options.voicingMode,
-    voicingLabel: getVoicingLabel(inversion),
+    voicingLabel: getVoicingDisplayLabel(inversion, options.voicingFamily),
     noteLabels: midiNotes.map(midi => semitoneToDisplayNote(midi % 12)),
     audioNotes: midiNotes.map(midiToPlaybackNoteName),
+    diagram,
   };
 }
 
@@ -717,6 +845,7 @@ export function createQuestion({
 }){
   const chordPool = buildChordPool(config);
   const safePool = chordPool.length ? chordPool : buildChordPool();
+  const voicingFamily = config.voicingFamily ?? 'close';
   const voicingMode = config.voicingMode ?? 'close-root';
   const answerContext = getAnswerModeContext({ config, rootMode, fixedRoot });
   const rootCandidates = getRootCandidates(rootMode, fixedRoot, config.randomRootIds);
@@ -726,6 +855,7 @@ export function createQuestion({
   let chordId = safePool[0];
   let chord = buildChordNotes(root, chordId, {
     baseOctave,
+    voicingFamily,
     voicingMode,
     randomVoicingIds: config.randomVoicingIds,
     randomFn,
@@ -739,6 +869,7 @@ export function createQuestion({
     chordId = pickFromList(safePool, randomFn);
     chord = buildChordNotes(root, chordId, {
       baseOctave,
+      voicingFamily,
       voicingMode,
       randomVoicingIds: config.randomVoicingIds,
       randomFn,

@@ -61,16 +61,24 @@ npm run preview
   - 随机根音
   - 随机根音时会禁用单根选择器，避免“随机但仍选单根”这种语义混乱
 - `Voicing`
+  - `Voicing Family`
+    - `封闭`
+    - `Drop 2`
+    - `Drop 3`
   - `原位`
   - `一转位`
   - `二转位`
   - `三转位`
   - `随机转位`
+- `Voicing Feedback`
+  - 答题后显示当前 voicing family 的可移动指板参考图
+  - 首版先覆盖 `封闭 / Drop 2 / Drop 3`
 
 说明：
 
 - 当前题库仍然是本地规则驱动，不是完整的 `My Ear Training` 替代品。
-- 当前版本的转位练习只支持 `封闭排列`。
+- 当前版本已经支持 `封闭 / Drop 2 / Drop 3` 三类 voicing family。
+- `Drop 2 / Drop 3` 当前先覆盖最常用的四声音家族：`maj7 / 7 / m7 / m7♭5`。
 - triad / 6 chord 的 tension 兼容先走保守规则，优先保证题目和命名不奇怪。
 - 钢琴音色使用 `Tone.Sampler` 加载 Salamander piano samples；采样加载失败时会退回到内置 synth。
 

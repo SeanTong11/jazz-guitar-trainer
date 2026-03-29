@@ -82,6 +82,16 @@ test('buildChordPool filters out chords that cannot support the selected inversi
   assert.deepEqual(pool, ['7']);
 });
 
+test('buildChordPool limits drop voicings to supported seventh-chord families', () => {
+  const pool = buildChordPool({
+    baseChordIds: ['major', 'dominant', 'minor', 'half-diminished', 'major-six'],
+    tensionIds: ['none', '9'],
+    voicingFamily: 'drop2',
+  });
+
+  assert.deepEqual(pool, ['maj7', '7', 'm7', 'm7b5']);
+});
+
 test('empty explicit selections stay empty instead of falling back to defaults', () => {
   assert.deepEqual(
     buildChordPool({
@@ -141,6 +151,32 @@ test('buildChordNotes can generate explicit third inversion voicings for seventh
   assert.deepEqual(chord.audioNotes, ['A#3', 'C4', 'E4', 'G4']);
 });
 
+test('buildChordNotes can generate drop2 voicings for supported seventh chords', () => {
+  const chord = buildChordNotes('C', 'maj7', {
+    baseOctave: 3,
+    voicingFamily: 'drop2',
+    voicingMode: 'close-root',
+  });
+
+  assert.equal(chord.voicingFamily, 'drop2');
+  assert.equal(chord.voicingFamilyLabel, 'Drop 2');
+  assert.deepEqual(chord.noteLabels, ['G', 'C', 'E', 'B']);
+  assert.deepEqual(chord.audioNotes, ['G2', 'C3', 'E3', 'B3']);
+});
+
+test('buildChordNotes can generate drop3 voicings for supported seventh chords', () => {
+  const chord = buildChordNotes('C', '7', {
+    baseOctave: 3,
+    voicingFamily: 'drop3',
+    voicingMode: 'close-root',
+  });
+
+  assert.equal(chord.voicingFamily, 'drop3');
+  assert.equal(chord.voicingFamilyLabel, 'Drop 3');
+  assert.deepEqual(chord.noteLabels, ['E', 'C', 'G', 'B♭']);
+  assert.deepEqual(chord.audioNotes, ['E2', 'C3', 'G3', 'A#3']);
+});
+
 test('createQuestion uses selected chord pool as answer options', () => {
   const question = createQuestion({
     config: {
@@ -155,9 +191,28 @@ test('createQuestion uses selected chord pool as answer options', () => {
 
   assert.equal(question.root, 'D');
   assert.equal(question.chordId, '7');
+  assert.equal(question.voicingFamily, 'close');
   assert.equal(question.voicingLabel, '原位');
   assert.deepEqual(question.optionLabels, ['7', '7♭9', '9', '7♯9']);
   assert.equal(question.signature, 'D:7:0');
+});
+
+test('createQuestion includes reference diagram metadata for supported drop voicings', () => {
+  const question = createQuestion({
+    config: {
+      baseChordIds: ['major'],
+      tensionIds: ['none'],
+      voicingFamily: 'drop2',
+      voicingMode: 'close-first',
+    },
+    rootMode: 'fixed',
+    fixedRoot: 'C',
+    randomFn: () => 0,
+  });
+
+  assert.equal(question.voicingFamily, 'drop2');
+  assert.equal(question.diagram.image, 'drop2-maj7.png');
+  assert.match(question.diagram.title, /Drop 2/i);
 });
 
 test('createQuestion switches to root answers when only one chord is left and root is random', () => {

@@ -470,6 +470,45 @@ select optgroup { font-weight: 600; color: var(--text-muted); }
   font-size: 0.84rem;
   color: var(--text-muted);
 }
+.ear-diagram-card {
+  margin-top: 16px;
+  border-top: 1px solid rgba(71,85,105,0.12);
+  padding-top: 16px;
+}
+.ear-diagram-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.ear-diagram-head strong {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  color: var(--text);
+}
+.ear-diagram-head span {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+.ear-diagram-image-wrap {
+  display: flex;
+  justify-content: center;
+  padding: 8px;
+  border-radius: var(--radius-sm);
+  background: rgba(248,250,252,0.85);
+}
+.ear-diagram-image {
+  width: 100%;
+  max-width: 720px;
+  border-radius: 12px;
+  box-shadow: 4px 4px 12px rgba(0,0,0,0.08);
+}
+.ear-diagram-caption {
+  margin-top: 10px;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
 .custom-select.is-disabled {
   opacity: 0.55;
 }
@@ -484,6 +523,7 @@ select optgroup { font-weight: 600; color: var(--text-muted); }
   .ear-prompt strong { font-size: 2.2rem; }
   .ear-options-grid .opt-btn { min-width: 110px; }
   .ear-feedback-head { flex-direction: column; align-items: flex-start; }
+  .ear-diagram-head { flex-direction: column; align-items: flex-start; }
   .ear-section-head { flex-direction: column; align-items: flex-start; }
   .choice-chip-grid { grid-template-columns: 1fr; }
   .filter-chip-grid { grid-template-columns: repeat(auto-fit, minmax(72px, 1fr)); }
