@@ -8,6 +8,7 @@ import {
   buildPlaybackEvents,
   createQuestion,
   formatRootLabel,
+  getAvailableVoicingOptionIds,
   getChordDefinition,
   TENSION_OPTIONS,
   TRAINING_TEMPLATES,
@@ -79,6 +80,24 @@ test('buildChordPool filters out chords that cannot support the selected inversi
   });
 
   assert.deepEqual(pool, ['7']);
+});
+
+test('empty explicit selections stay empty instead of falling back to defaults', () => {
+  assert.deepEqual(
+    buildChordPool({
+      baseChordIds: [],
+      tensionIds: [],
+    }),
+    [],
+  );
+
+  assert.deepEqual(
+    getAvailableVoicingOptionIds({
+      baseChordIds: [],
+      tensionIds: [],
+    }),
+    [],
+  );
 });
 
 test('buildChordNotes returns expected label and notes for major sharp eleven', () => {

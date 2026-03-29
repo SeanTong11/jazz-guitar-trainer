@@ -41,8 +41,18 @@ function cloneTemplateConfig(template){
   };
 }
 
+function createCustomConfig(){
+  return {
+    baseChordIds: [],
+    tensionIds: [],
+    playbackMode: 'chord',
+    voicingMode: 'close-root',
+    randomRootIds: [],
+    randomVoicingIds: [],
+  };
+}
+
 function createInitialState(){
-  const initialTemplate = TRAINING_TEMPLATES[0];
   return {
     active: false,
     answered: false,
@@ -52,8 +62,8 @@ function createInitialState(){
     currentQuestion: null,
     autoNext: false,
     rootMode: 'fixed',
-    selectedTemplateId: initialTemplate.id,
-    config: cloneTemplateConfig(initialTemplate),
+    selectedTemplateId: 'custom',
+    config: createCustomConfig(),
     nextTimer: null,
   };
 }
@@ -621,6 +631,9 @@ export function initEarTraining(){
     const nextValue = event.detail?.value ?? templateSelect.getValue();
     if(nextValue === 'custom'){
       setTemplateSelection('custom');
+      state.config = normalizeConfig(createCustomConfig());
+      renderConfigChips();
+      restartIfActive();
       return;
     }
     applyTemplate(nextValue);

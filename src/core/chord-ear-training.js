@@ -429,7 +429,7 @@ const CHORD_DEFINITIONS = BASE_ORDER.flatMap(familyId => (
 ));
 
 function getSelectedIds(selectedIds, fallbackIds){
-  if(Array.isArray(selectedIds) && selectedIds.length){
+  if(Array.isArray(selectedIds)){
     return [...selectedIds];
   }
   return [...fallbackIds];
